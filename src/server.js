@@ -17,10 +17,11 @@ const adjustEndpoints = require('./controllers/adjustEndpoints');
 const providerApp = express();
 const healthApp = express();
 
-// Middleware - configure JSON parser to accept external-dns content type
+// Middleware - parse all requests as JSON regardless of content-type
+// External-DNS uses 'application/external.dns.webhook+json;version=1' but the payload is always JSON
 providerApp.use(express.json({ 
   limit: '10mb',
-  type: ['application/json', 'application/external.dns.webhook+json*']
+  type: '*/*'  // Accept any content-type and parse as JSON
 }));
 healthApp.use(express.json());
 
