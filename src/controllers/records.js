@@ -15,14 +15,22 @@ const updateQueue = [];
  * Get all DNS records (GET /records)
  */
 async function getRecords(req, res) {
-  logger.debug('Get records request received');
+  const acceptHeader = req.get('Accept');
+  
+  logger.debug('Get records request received', { accept: acceptHeader });
+  
+  // Validate Accept header
+  if (acceptHeader && !acceptHeader.includes(config.contentType)) {
+    logger.warn('Unsupported Accept header', { accept: acceptHeader });
+    return res.status(406).json({ error: 'Not Acceptable' });
+  }
   
   try {
     const records = await dnsmasqService.getRecords();
     
-    // Set content type for external-dns webhook protocol
+    // Set exact content type (no charset) for external-dns webhook protocol
     res.setHeader('Content-Type', config.contentType);
-    res.json(records);
+    res.send(JSON.stringify(records));
     
     logger.info('Get records response sent', { count: records.length });
     

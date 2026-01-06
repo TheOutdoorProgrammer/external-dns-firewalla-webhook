@@ -34,6 +34,7 @@ console.log(`Metrics Port: ${METRICS_PORT}`);
 function proxyRequest(clientReq, clientRes, targetUrl) {
   const startTime = Date.now();
   const url = new URL(clientReq.url, targetUrl);
+  const acceptHeader = clientReq.headers['accept'];
   
   const options = {
     hostname: url.hostname,
@@ -52,15 +53,15 @@ function proxyRequest(clientReq, clientRes, targetUrl) {
   console.log(`[${clientReq.method}] ${clientReq.url} -> ${url.href}`);
 
   const proxyReq = http.request(options, (proxyRes) => {
-    // Clean up headers - remove charset from content-type for external-dns compatibility
+    // Echo back the Accept header as Content-Type (per webhook spec)
+    // External-DNS sends Accept: application/external.dns.webhook+json;version=1
+    // We must respond with the exact same value in Content-Type
     const headers = { ...proxyRes.headers };
-    if (headers['content-type']) {
-      // External-DNS expects exactly: application/external.dns.webhook+json;version=1
-      // Express adds charset which breaks strict validation
-      headers['content-type'] = headers['content-type'].replace(/;\s*charset=[^;]+/, '');
+    if (acceptHeader) {
+      headers['content-type'] = acceptHeader;
     }
     
-    // Forward status code and cleaned headers
+    // Forward status code and headers
     clientRes.writeHead(proxyRes.statusCode, headers);
     
     // Pipe response body
