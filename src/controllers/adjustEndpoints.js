@@ -1,6 +1,7 @@
 /**
  * Adjust endpoints endpoint (POST /adjustendpoints)
  * Filters and adjusts endpoints based on provider capabilities
+ * Supports A, TXT, and CNAME record types
  */
 
 const config = require('../config');
@@ -41,25 +42,25 @@ function adjustEndpoints(req, res) {
     return res.status(400).json({ error: 'Request body must be an array of endpoints' });
   }
   
-  // Filter endpoints:
-  // 1. Keep only A and TXT record types
-  // 2. Remove invalid endpoints
-  const adjustedEndpoints = endpoints.filter(endpoint => {
-    // Check if valid endpoint structure
-    if (!endpoint || typeof endpoint !== 'object') {
-      logger.warn('Skipping invalid endpoint (not an object)');
-      return false;
-    }
-    
-    // Only support A and TXT records
-    const recordType = endpoint.recordType;
-    if (recordType !== 'A' && recordType !== 'TXT') {
-      logger.debug('Filtering out unsupported record type', { 
-        dnsName: endpoint.dnsName, 
-        recordType 
-      });
-      return false;
-    }
+   // Filter endpoints:
+   // 1. Keep only A, TXT, and CNAME record types
+   // 2. Remove invalid endpoints
+   const adjustedEndpoints = endpoints.filter(endpoint => {
+     // Check if valid endpoint structure
+     if (!endpoint || typeof endpoint !== 'object') {
+       logger.warn('Skipping invalid endpoint (not an object)');
+       return false;
+     }
+
+     // Support A, TXT, and CNAME records (as advertised in README)
+     const recordType = endpoint.recordType;
+     if (recordType !== 'A' && recordType !== 'TXT' && recordType !== 'CNAME') {
+       logger.debug('Filtering out unsupported record type', {
+         dnsName: endpoint.dnsName,
+         recordType
+       });
+       return false;
+     }
     
     // Validate endpoint structure
     if (!validator.isValidEndpoint(endpoint)) {
