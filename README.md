@@ -41,6 +41,15 @@ flowchart LR
 
 Each steps needs to be ran on either your firewalla device or your Kubernetes cluster. The headers tell you where you should run it.
 
+```diff
+- Very Important Notice
+- This project is meant to run on a secure local network. 
+- DO NOT expose the firewalla side of this project to the internet. (default port 8888)
+- At the moment there is no http authorization in place for its API.
+- Which means anyone with access to your firewalla will be able to create/manage/delete dns records.
+- If you port forward the service port, anyone on the internet will be able to do the same.
+```
+
 ### 1. Install the Webhook Provider (Firewalla) 
 
 SSH into your Firewalla as the `pi` user and run:
