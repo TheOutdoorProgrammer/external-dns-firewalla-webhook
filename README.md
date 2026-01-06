@@ -6,12 +6,38 @@ A webhook provider for [external-dns](https://github.com/kubernetes-sigs/externa
 
 This webhook provider allows Kubernetes external-dns to automatically create, update, and delete DNS records on your Firewalla device. It's perfect for home labs and small deployments where you want to use your Firewalla as the authoritative DNS server for your local domains.
 
+### Architecture
+
+```mermaid
+graph TB
+    subgraph "Kubernetes Cluster"
+        A[Service/Ingress<br/>with DNS annotations] --> B[External-DNS<br/>Controller]
+        B --> C[Webhook Proxy<br/>Sidecar Container]
+    end
+    
+    subgraph "Firewalla Device"
+        D[Webhook Provider<br/>Node.js Server :8888] --> E[dnsmasq Config Files<br/>~/.firewalla/config/dnsmasq_local/]
+        E --> F[firerouter_dns<br/>Service]
+        F --> G[DNS Resolution<br/>Network-wide]
+    end
+    
+    C -->|HTTP Proxy| D
+    
+    style A fill:#e1f5ff
+    style B fill:#fff4e1
+    style C fill:#ffe1e1
+    style D fill:#e1ffe1
+    style E fill:#f0f0f0
+    style F fill:#e1e1ff
+    style G fill:#ffe1ff
+```
+
 ### How It Works
 
-1. External-DNS running in your Kubernetes cluster detects services/ingresses that need DNS records
-2. External-DNS sends webhook requests to this provider running on your Firewalla
-3. The provider translates these requests into dnsmasq configuration files
-4. DNS records are immediately available on your network via Firewalla's DNS server
+1. **External-DNS** running in your Kubernetes cluster detects services/ingresses that need DNS records
+2. **Webhook Proxy** sidecar container receives requests from external-dns and forwards them to Firewalla
+3. **Firewalla Webhook Provider** translates these requests into dnsmasq configuration files
+4. **DNS records** are immediately available on your network via Firewalla's DNS server
 
 ### Features
 
