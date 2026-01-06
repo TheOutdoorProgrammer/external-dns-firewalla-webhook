@@ -12,19 +12,21 @@ This project enables external-dns to automatically manage DNS records on your Fi
 ## Architecture
 
 ```mermaid
-graph LR
-    subgraph "Kubernetes Cluster"
-        A[Service/Ingress<br/>with DNS annotations] --> B[External-DNS<br/>Controller]
-        B --> C[Webhook Proxy<br/>Sidecar Container]
+flowchart LR
+    subgraph K ["Kubernetes Cluster"]
+    direction LR
+        A["Service/Ingress<br/>with DNS annotations"] --> B["External-DNS<br/>Controller"]
+        B --> C["Webhook Proxy<br/>Sidecar Container"]
     end
 
-    subgraph "Firewalla Device"
-        D[Webhook Provider<br/>Node.js Server] --> E[dnsmasq Config Files<br/>~/.firewalla/config/dnsmasq_local/]
-        E --> F[firerouter_dns<br/>Service]
-        F --> G[DNS Resolution<br/>Network-wide]
+    subgraph F ["Firewalla Device"]
+    direction LR
+        D["Webhook Provider<br/>Node.js Server"] --> E["dnsmasq Config Files<br/>~/.firewalla/config/dnsmasq_local/"]
+        E --> L["firerouter_dns<br/>Service"]
+        L --> G["DNS Resolution<br/>Network-wide"]
     end
 
-    C -->|HTTP Proxy| D
+    C -->|"HTTP Proxy"| D
 ```
 
 ## Prerequisites
