@@ -107,54 +107,64 @@ const metricsServer = http.createServer((req, res) => {
   
   // Health check endpoint
   if (url.pathname === '/health' || url.pathname === '/healthz') {
+    let responseSent = false;
+
+    const sendResponse = (statusCode, message) => {
+      if (responseSent) return;
+      responseSent = true;
+      res.writeHead(statusCode, { 'Content-Type': 'text/plain' });
+      res.end(message);
+    };
+
     // Check Firewalla health endpoint directly
     const healthCheck = http.get(`${FIREWALLA_HEALTH_URL}/healthz`, (healthRes) => {
       if (healthRes.statusCode === 200) {
-        res.writeHead(200, { 'Content-Type': 'text/plain' });
-        res.end('ok');
+        sendResponse(200, 'ok');
       } else {
-        res.writeHead(503, { 'Content-Type': 'text/plain' });
-        res.end('unhealthy');
+        sendResponse(503, 'unhealthy');
       }
     });
-    
+
     healthCheck.on('error', (err) => {
       console.error('Health check failed:', err.message);
-      res.writeHead(503, { 'Content-Type': 'text/plain' });
-      res.end('unhealthy');
+      sendResponse(503, 'unhealthy');
     });
-    
+
     healthCheck.setTimeout(5000, () => {
       healthCheck.destroy();
-      res.writeHead(503, { 'Content-Type': 'text/plain' });
-      res.end('unhealthy - timeout');
+      sendResponse(503, 'unhealthy - timeout');
     });
     return;
   }
   
   // Readiness check endpoint
   if (url.pathname === '/ready' || url.pathname === '/readyz') {
+    let responseSent = false;
+
+    const sendResponse = (statusCode, message) => {
+      if (responseSent) return;
+      responseSent = true;
+      res.writeHead(statusCode, { 'Content-Type': 'text/plain' });
+      res.end(message);
+    };
+
     // Check if we can reach Firewalla
     const healthCheck = http.get(`${FIREWALLA_HEALTH_URL}/healthz`, (healthRes) => {
       if (healthRes.statusCode === 200) {
-        res.writeHead(200, { 'Content-Type': 'text/plain' });
-        res.end('ready');
+        sendResponse(200, 'ready');
       } else {
-        res.writeHead(503, { 'Content-Type': 'text/plain' });
-        res.end('not ready');
+        sendResponse(503, 'not ready');
       }
     });
-    
+
     healthCheck.on('error', (err) => {
       console.error('Readiness check failed:', err.message);
-      res.writeHead(503, { 'Content-Type': 'text/plain' });
-      res.end('not ready');
+      sendResponse(503, 'not ready');
     });
-    
+
     healthCheck.setTimeout(5000, () => {
       healthCheck.destroy();
-      res.writeHead(503, { 'Content-Type': 'text/plain' });
-      res.end('not ready - timeout');
+      sendResponse(503, 'not ready - timeout');
     });
     return;
   }
