@@ -77,7 +77,7 @@ provider:
   webhook:
     image:
       repository: ghcr.io/theoutdoorprogrammer/external-dns-firewalla-webhook
-      tag: 1.0.0
+      tag: 1.1.0
     env:
        - name: FIREWALLA_HOST
          value: "192.168.229.1"
@@ -89,8 +89,13 @@ provider:
          value: "8888"
        - name: METRICS_PORT
          value: "8080"
-       - name: SHARED_SECRET
-         value: "your-secure-shared-secret-here"  # Must match Firewalla shared secret
+       - name: SHARED_SECRET # You can use a secret reference, must match Firewalla shared secret (recommended)
+         valueFrom:
+            secretKeyRef:
+               name: firewalla-webhook-secret
+               key: shared-secret
+#       - name: SHARED_SECRET # Or manually set the shared secret (not recommended)
+#         value: "your-secure-shared-secret-here"
     livenessProbe:
       httpGet:
         path: /health
@@ -145,6 +150,11 @@ serviceAccount:
 # RBAC
 rbac:
   create: true
+```
+
+Heres a quick way to create the above secret if you use the recommended approach:
+```bash
+kubectl create secret generic firewalla-webhook-secret --from-literal=shared-secret="{your-secure-shared-secret-here}"
 ```
 
 ## Configuration
