@@ -403,6 +403,7 @@ The webhook provider is configured via the `.env` file located at `/opt/external
 - `DNSMASQ_DIR`: Path to dnsmasq config directory (default: `/home/pi/.firewalla/config/dnsmasq_local`)
 - `LOG_LEVEL`: Log level - `error`, `warn`, `info`, or `debug` (default: `info`)
 - `DRY_RUN`: If `true`, don't make actual changes (default: `false`)
+- `RESTART_COMMAND`: Command to restart DNS service after changes (default: `sudo systemctl restart firerouter_dns`)
 
 #### Webhook Proxy (Kubernetes Sidecar)
 
@@ -644,6 +645,11 @@ txt-record=external-dns-a-example.home.local,"heritage=external-dns,external-dns
    ```bash
    cat /etc/sudoers.d/external-dns-webhook
    ```
+
+4. **If running in a container with NoNewPrivileges**: The systemd service has `NoNewPrivileges=true` set for security. If sudo fails with "no new privileges" error, you can:
+   - Configure the restart command via `RESTART_COMMAND` environment variable to use a non-sudo approach
+   - Or modify the systemd service to remove `NoNewPrivileges=true` (reduces security)
+   - Or ensure the `pi` user has passwordless sudo access to `systemctl restart firerouter_dns`
 
 ### Webhook Proxy Health Check Issues
 

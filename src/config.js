@@ -69,7 +69,7 @@ const config = {
   
   // Constants
   contentType: 'application/external.dns.webhook+json;version=1',
-  restartCommand: 'sudo systemctl restart firerouter_dns'
+  restartCommand: getOptional('RESTART_COMMAND', 'sudo systemctl restart firerouter_dns')
 };
 
 // Validate configuration
