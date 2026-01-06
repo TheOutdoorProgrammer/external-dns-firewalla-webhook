@@ -38,28 +38,34 @@ This webhook provider allows Kubernetes external-dns to automatically create, up
 
 ### One-Line Installation
 
-SSH into your Firewalla as the `pi` user and run:
+SSH into your Firewalla as the `pi` user and run these two commands:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/TheOutdoorProgrammer/external-dns-firewalla-webhook/main/scripts/install.sh | bash -s -- "home.local,*.home.local"
+# Step 1: Create config file with your domain filter
+echo "home.local,*.home.local" > /tmp/external-dns-domain-filter
+
+# Step 2: Run the installer
+curl -fsSL https://raw.githubusercontent.com/TheOutdoorProgrammer/external-dns-firewalla-webhook/main/scripts/install.sh | bash
 ```
 
-**Important**: Replace `home.local,*.home.local` with your actual domain filter.
+**Important**: Replace `home.local,*.home.local` with your actual domain filter in step 1.
 
 **Note**: The script will prompt for your sudo password when needed for system configuration.
 
 This will:
+- Verify your domain filter configuration
 - Clone the repository (with bundled dependencies)
 - Verify dependencies
 - Configure the service (with sudo)
 - Set up your domain filter
 - Start the webhook provider
+- Clean up the temporary config file
 
 **Note**: Dependencies (Express.js) are bundled in the repository since npm is not available on Firewalla.
 
-### Interactive Installation
+### Manual Installation
 
-If you prefer an interactive installation that prompts for configuration:
+If you prefer to review the installation script first:
 
 1. SSH into your Firewalla device as the `pi` user:
    ```bash
@@ -77,27 +83,24 @@ If you prefer an interactive installation that prompts for configuration:
    cat scripts/install.sh
    ```
 
-4. Run the installation script (as pi user, not root):
+4. Create the domain filter config file:
+   ```bash
+   echo "home.local,*.home.local" > /tmp/external-dns-domain-filter
+   ```
+   
+   Replace `home.local,*.home.local` with your actual domains.
+
+5. Run the installation script (as pi user, not root):
    ```bash
    ./scripts/install.sh
    ```
    
-   The script will ask for your sudo password and domain filter when needed.
-
-5. Enter your domain filter when prompted (e.g., `home.local,*.home.local`)
+   The script will ask for your sudo password when needed.
 
 6. Verify the service is running:
    ```bash
    sudo systemctl status external-dns-firewalla-webhook
    ```
-
-### Alternative: Pass Domain Filter as Argument
-
-You can also provide the domain filter directly:
-
-```bash
-./scripts/install.sh "home.local,*.home.local"
-```
 
 ### Configuration in Kubernetes
 
