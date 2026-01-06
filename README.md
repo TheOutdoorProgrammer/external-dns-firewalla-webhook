@@ -52,8 +52,9 @@ This project consists of two components that work together:
 
 - ✅ Automatic DNS record management for Kubernetes resources
 - ✅ Support for A records (IPv4 addresses)
+- ✅ Support for CNAME records (domain aliases)
 - ✅ Support for TXT records (for external-dns ownership tracking)
-- ✅ Multiple IP addresses per domain name
+- ✅ Multiple targets per domain name
 - ✅ Configurable domain filters
 - ✅ Safe concurrent request handling
 - ✅ Systemd service management
@@ -553,7 +554,13 @@ address=/example.home.local/192.168.1.100
 address=/example.home.local/192.168.1.101
 ```
 
-#### TXT Records  
+#### CNAME Records
+File: `~/.firewalla/config/dnsmasq_local/api.home.local`
+```
+cname=api.home.local,service.home.local
+```
+
+#### TXT Records
 File: `~/.firewalla/config/dnsmasq_local/external-dns-a-example.home.local.txt`
 ```
 txt-record=external-dns-a-example.home.local,"heritage=external-dns,external-dns/owner=my-cluster"
@@ -775,6 +782,13 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Discussions**: [GitHub Discussions](https://github.com/TheOutdoorProgrammer/external-dns-firewalla-webhook/discussions)
 
 ## Changelog
+
+### v1.1.0 (CNAME Support)
+
+- Added support for CNAME records (domain aliases)
+- Enhanced validation for CNAME targets (must be valid DNS names)
+- Updated dnsmasq configuration format for CNAME records
+- Multiple targets per CNAME record supported
 
 ### v1.0.0 (Initial Release)
 

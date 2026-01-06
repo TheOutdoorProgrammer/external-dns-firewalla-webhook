@@ -76,31 +76,44 @@ async function getRecords() {
             });
           }
         } else {
-          // Parse A records
-          const targets = [];
-          let dnsName = null;
-          
-          for (const line of lines) {
-            // Format: address=/domain/ip
-            const match = line.match(/^address=\/([^\/]+)\/(.+)$/);
-            if (match) {
-              dnsName = match[1];
-              const ip = match[2];
-              if (validator.isValidIPv4(ip)) {
-                targets.push(ip);
-              }
-            }
-          }
-          
-          if (dnsName && targets.length > 0) {
-            records.push({
-              dnsName: dnsName,
-              targets: targets,
-              recordType: 'A',
-              recordTTL: config.dnsTTL
-            });
-          }
-        }
+           // Parse A and CNAME records
+           const targets = [];
+           let dnsName = null;
+           let recordType = 'A';
+
+           for (const line of lines) {
+             // Format: address=/domain/ip
+             const addressMatch = line.match(/^address=\/([^\/]+)\/(.+)$/);
+             if (addressMatch) {
+               dnsName = addressMatch[1];
+               const ip = addressMatch[2];
+               if (validator.isValidIPv4(ip)) {
+                 targets.push(ip);
+                 recordType = 'A';
+               }
+             }
+
+             // Format: cname=domain,target
+             const cnameMatch = line.match(/^cname=([^,]+),(.+)$/);
+             if (cnameMatch) {
+               dnsName = cnameMatch[1];
+               const target = cnameMatch[2];
+               if (validator.isValidDnsName(target)) {
+                 targets.push(target);
+                 recordType = 'CNAME';
+               }
+             }
+           }
+
+           if (dnsName && targets.length > 0) {
+             records.push({
+               dnsName: dnsName,
+               targets: targets,
+               recordType: recordType,
+               recordTTL: config.dnsTTL
+             });
+           }
+         }
       } catch (err) {
         logger.warn('Failed to parse file', { file, error: err.message });
       }
@@ -129,16 +142,19 @@ async function writeRecord(endpoint) {
   
   const filePath = getRecordFilePath(dnsName, recordType);
   
-  let content;
-  if (recordType === 'A') {
-    // Generate dnsmasq A record format
-    content = targets.map(ip => `address=/${dnsName}/${ip}`).join('\n') + '\n';
-  } else if (recordType === 'TXT') {
-    // Generate dnsmasq TXT record format
-    content = targets.map(txt => `txt-record=${dnsName},"${txt}"`).join('\n') + '\n';
-  } else {
-    throw new Error(`Unsupported record type: ${recordType}`);
-  }
+   let content;
+   if (recordType === 'A') {
+     // Generate dnsmasq A record format
+     content = targets.map(ip => `address=/${dnsName}/${ip}`).join('\n') + '\n';
+   } else if (recordType === 'TXT') {
+     // Generate dnsmasq TXT record format
+     content = targets.map(txt => `txt-record=${dnsName},"${txt}"`).join('\n') + '\n';
+   } else if (recordType === 'CNAME') {
+     // Generate dnsmasq CNAME record format
+     content = targets.map(target => `cname=${dnsName},${target}`).join('\n') + '\n';
+   } else {
+     throw new Error(`Unsupported record type: ${recordType}`);
+   }
   
   if (config.dryRun) {
     logger.info('[DRY RUN] Would write file', { filePath, content: content.trim() });

@@ -45,7 +45,7 @@ function isValidIPv4(ip) {
  * Validate record type
  */
 function isValidRecordType(type) {
-  const allowedTypes = ['A', 'TXT'];
+  const allowedTypes = ['A', 'TXT', 'CNAME'];
   return allowedTypes.includes(type);
 }
 
@@ -84,7 +84,12 @@ function isValidEndpoint(endpoint) {
   if (endpoint.recordType === 'TXT') {
     return endpoint.targets.every(t => typeof t === 'string' && t.length > 0);
   }
-  
+
+  // For CNAME records, targets must be valid DNS names
+  if (endpoint.recordType === 'CNAME') {
+    return endpoint.targets.every(isValidDnsName);
+  }
+
   return true;
 }
 
