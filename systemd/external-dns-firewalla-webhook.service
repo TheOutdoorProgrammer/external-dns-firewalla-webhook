@@ -18,7 +18,6 @@ StandardError=journal
 SyslogIdentifier=external-dns-firewalla-webhook
 
 # Security hardening
-NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=read-only
