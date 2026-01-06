@@ -15,7 +15,7 @@ function adjustEndpoints(req, res) {
   const acceptHeader = req.get('Accept');
   
   logger.debug('Adjust endpoints request received', { 
-    count: (endpoints || []).length,
+    count: Array.isArray(endpoints) ? endpoints.length : 0,
     accept: acceptHeader
   });
   
@@ -25,35 +25,11 @@ function adjustEndpoints(req, res) {
     return res.status(406).json({ error: 'Not Acceptable' });
   }
   
-  // Validate request body
+  // Validate input
   if (!Array.isArray(endpoints)) {
-    logger.warn('Invalid request body for adjust endpoints');
-    return res.status(400).json({ error: 'Invalid request body' });
+    logger.warn('Invalid request body for adjust endpoints (not an array)');
+    return res.status(400).json({ error: 'Request body must be an array of endpoints' });
   }
-  
-  // Filter out unsupported record types
-  // We only support A and TXT records
-  const filtered = endpoints.filter(endpoint => {
-    const supported = SUPPORTED_RECORD_TYPES.has(endpoint.recordType);
-    if (!supported) {
-      logger.debug('Filtering out unsupported record type', {
-        dnsName: endpoint.dnsName,
-        recordType: endpoint.recordType
-      });
-    }
-    return supported;
-  });
-  
-  logger.info('Adjust endpoints completed', {
-    input: endpoints.length,
-    output: filtered.length,
-    filtered: endpoints.length - filtered.length
-  });
-  
-  // Set exact content type (no charset) for external-dns webhook protocol
-  res.setHeader('Content-Type', config.contentType);
-  res.send(JSON.stringify(filtered));
-}
   
   // Filter endpoints:
   // 1. Keep only A and TXT record types
@@ -93,9 +69,9 @@ function adjustEndpoints(req, res) {
     filteredCount: endpoints.length - adjustedEndpoints.length
   });
   
-  // Set content type for external-dns webhook protocol
+  // Set exact content type (no charset) for external-dns webhook protocol
   res.setHeader('Content-Type', config.contentType);
-  res.json(adjustedEndpoints);
+  res.send(JSON.stringify(adjustedEndpoints));
 }
 
 module.exports = adjustEndpoints;
