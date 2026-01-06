@@ -25,28 +25,36 @@ DNSMASQ_DIR="/home/pi/.firewalla/config/dnsmasq_local"
 SUDOERS_FILE="/etc/sudoers.d/external-dns-webhook"
 GITHUB_REPO="https://github.com/TheOutdoorProgrammer/external-dns-firewalla-webhook.git"
 CONFIG_FILE="/tmp/external-dns-domain-filter"
+SECRET_FILE="/tmp/external-dns-shared-secret"
 
 echo "========================================="
 echo "External-DNS Firewalla Webhook Installer"
 echo "========================================="
 echo ""
 
-# Check for config file first
-if [ ! -f "$CONFIG_FILE" ]; then
-    echo -e "${RED}ERROR: Configuration file not found${NC}"
+# Check for config files first
+if [ ! -f "$CONFIG_FILE" ] || [ ! -f "$SECRET_FILE" ]; then
+    echo -e "${RED}ERROR: Configuration files not found${NC}"
     echo ""
-    echo "Before running this installer, you must create a config file with your domain filter."
+    echo "Before running this installer, you must create two config files:"
+    echo "1. Domain filter configuration"
+    echo "2. Shared secret for authentication"
     echo ""
-    echo "Step 1: Create the config file with your domain(s):"
+    echo "Step 1: Create the domain filter config file:"
     echo "  echo \"home.local,*.home.local\" > $CONFIG_FILE"
     echo ""
-    echo "Step 2: Run the installer:"
+    echo "Step 2: Create the shared secret config file:"
+    echo "  openssl rand -hex 32 > $SECRET_FILE"
+    echo "  # Or use: echo \"your-secure-random-secret-here\" > $SECRET_FILE"
+    echo ""
+    echo "Step 3: Run the installer:"
     echo "  curl -fsSL https://raw.githubusercontent.com/TheOutdoorProgrammer/external-dns-firewalla-webhook/main/scripts/install.sh | bash"
     echo ""
     echo "For interactive installation:"
     echo "  git clone $GITHUB_REPO"
     echo "  cd external-dns-firewalla-webhook"
     echo "  echo \"home.local,*.home.local\" > $CONFIG_FILE"
+    echo "  openssl rand -hex 32 > $SECRET_FILE"
     echo "  ./scripts/install.sh"
     echo ""
     exit 1
@@ -56,7 +64,7 @@ fi
 DOMAIN_FILTER=$(cat "$CONFIG_FILE" | tr -d '\n\r' | xargs)
 
 if [ -z "$DOMAIN_FILTER" ]; then
-    echo -e "${RED}ERROR: Config file is empty${NC}"
+    echo -e "${RED}ERROR: Domain filter config file is empty${NC}"
     echo ""
     echo "The file $CONFIG_FILE exists but contains no domain filter."
     echo "Please add your domain filter to the file:"
@@ -65,7 +73,21 @@ if [ -z "$DOMAIN_FILTER" ]; then
     exit 1
 fi
 
+# Read shared secret from config file
+SHARED_SECRET=$(cat "$SECRET_FILE" | tr -d '\n\r' | xargs)
+
+if [ -z "$SHARED_SECRET" ]; then
+    echo -e "${RED}ERROR: Shared secret config file is empty${NC}"
+    echo ""
+    echo "The file $SECRET_FILE exists but contains no shared secret."
+    echo "Please add your shared secret to the file:"
+    echo "  openssl rand -hex 32 > $SECRET_FILE"
+    echo ""
+    exit 1
+fi
+
 echo -e "${GREEN}Found domain filter:${NC} $DOMAIN_FILTER"
+echo -e "${GREEN}Found shared secret:${NC} ${SHARED_SECRET:0:8}..."
 echo ""
 
 # Check if running as pi user
@@ -160,13 +182,15 @@ echo "Dependencies verified (bundled in repository)"
 
 # Configure environment
 echo -e "${GREEN}[6/9]${NC} Configuring environment..."
-# Update .env file with domain filter from config file
+# Update .env file with domain filter and shared secret from config files
 sed -i "s/DOMAIN_FILTER=.*/DOMAIN_FILTER=$DOMAIN_FILTER/" "$INSTALL_DIR/.env"
+sed -i "s/SHARED_SECRET=.*/SHARED_SECRET=$SHARED_SECRET/" "$INSTALL_DIR/.env"
 echo "Domain filter configured: $DOMAIN_FILTER"
+echo "Shared secret configured: ${SHARED_SECRET:0:8}..."
 
-# Clean up config file after successful configuration
-rm -f "$CONFIG_FILE"
-echo "Removed temporary config file"
+# Clean up config files after successful configuration
+rm -f "$CONFIG_FILE" "$SECRET_FILE"
+echo "Removed temporary config files"
 
 # Create dnsmasq directory
 echo -e "${GREEN}[7/9]${NC} Creating dnsmasq directory..."

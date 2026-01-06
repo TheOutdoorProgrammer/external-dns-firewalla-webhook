@@ -3,6 +3,10 @@
  * Test script for adjustEndpoints CNAME support
  */
 
+// Set required environment variables for testing
+process.env.DOMAIN_FILTER = 'test.local';
+process.env.SHARED_SECRET = 'test-secret';
+
 // Mock logger
 const logger = {
   info: () => {},

@@ -4,7 +4,8 @@
   "description": "External-DNS webhook provider for Firewalla - manages DNS records via dnsmasq (node_modules bundled for Firewalla)",
   "main": "src/server.js",
   "bundledDependencies": [
-    "express"
+    "express",
+    "jsonwebtoken"
   ],
   "scripts": {
     "start": "node src/server.js",
@@ -28,7 +29,8 @@
   "author": "TheOutdoorProgrammer",
   "license": "MIT",
   "dependencies": {
-    "express": "^4.17.1"
+    "express": "^4.17.1",
+    "jsonwebtoken": "^9.0.2"
   },
   "devDependencies": {}
 }

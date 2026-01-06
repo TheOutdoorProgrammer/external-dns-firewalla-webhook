@@ -10,8 +10,12 @@ LABEL org.opencontainers.image.licenses="MIT"
 # Create app directory
 WORKDIR /app
 
-# Copy proxy script
+# Copy proxy script and package files
 COPY webhook-proxy/proxy.js .
+COPY package*.json ./
+
+# Install dependencies
+RUN npm ci --only=production
 
 # Create non-root user (use existing node user from base image)
 RUN chown -R node:node /app

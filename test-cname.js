@@ -3,6 +3,10 @@
  * Test script for CNAME record functionality
  */
 
+// Set required environment variables for testing
+process.env.DOMAIN_FILTER = 'test.local';
+process.env.SHARED_SECRET = 'test-secret';
+
 // Mock config for testing
 const config = {
   dnsTTL: 300,

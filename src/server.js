@@ -13,6 +13,9 @@ const negotiate = require('./controllers/negotiate');
 const { getRecords, applyChanges } = require('./controllers/records');
 const adjustEndpoints = require('./controllers/adjustEndpoints');
 
+// Middleware
+const authenticate = require('./middleware/auth');
+
 // Create Express apps for provider and health endpoints
 const providerApp = express();
 const healthApp = express();
@@ -58,6 +61,9 @@ providerApp.use((err, req, res, next) => {
 
 // Provider API endpoints (port 8888)
 // These are the external-dns webhook protocol endpoints
+providerApp.use('/records', authenticate);
+providerApp.use('/adjustendpoints', authenticate);
+
 providerApp.get('/', negotiate);
 providerApp.get('/records', getRecords);
 providerApp.post('/records', applyChanges);

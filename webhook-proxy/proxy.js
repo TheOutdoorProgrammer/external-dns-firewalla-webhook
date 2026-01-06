@@ -10,6 +10,7 @@
 
 const http = require('http');
 const https = require('https');
+const jwt = require('jsonwebtoken');
 
 // Configuration from environment variables
 const FIREWALLA_HOST = process.env.FIREWALLA_HOST || '192.168.229.1';
@@ -17,6 +18,13 @@ const FIREWALLA_PROVIDER_PORT = process.env.FIREWALLA_PROVIDER_PORT || '8888';
 const FIREWALLA_HEALTH_PORT = process.env.FIREWALLA_HEALTH_PORT || '8080';
 const WEBHOOK_PORT = process.env.WEBHOOK_PORT || '8888';
 const METRICS_PORT = process.env.METRICS_PORT || '8080';
+const SHARED_SECRET = process.env.SHARED_SECRET;
+
+// Validate required configuration
+if (!SHARED_SECRET) {
+  console.error('SHARED_SECRET environment variable is required');
+  process.exit(1);
+}
 
 // Build Firewalla URLs
 const FIREWALLA_PROVIDER_URL = `http://${FIREWALLA_HOST}:${FIREWALLA_PROVIDER_PORT}`;
@@ -27,6 +35,19 @@ console.log(`Firewalla Provider: ${FIREWALLA_PROVIDER_URL}`);
 console.log(`Firewalla Health: ${FIREWALLA_HEALTH_URL}`);
 console.log(`Webhook Port: ${WEBHOOK_PORT}`);
 console.log(`Metrics Port: ${METRICS_PORT}`);
+
+/**
+ * Generate JWT token for authentication
+ */
+function generateAuthToken() {
+  const payload = {
+    iss: 'external-dns-proxy',
+    iat: Math.floor(Date.now() / 1000),
+    exp: Math.floor(Date.now() / 1000) + (24 * 60 * 60) // 24 hours
+  };
+
+  return jwt.sign(payload, SHARED_SECRET);
+}
 
 /**
  * Proxy HTTP request to Firewalla
@@ -46,7 +67,8 @@ function proxyRequest(clientReq, clientRes, targetUrl) {
       'host': url.host,
       'x-forwarded-for': clientReq.socket.remoteAddress,
       'x-forwarded-proto': 'http',
-      'x-forwarded-host': clientReq.headers.host
+      'x-forwarded-host': clientReq.headers.host,
+      'authorization': `Bearer ${generateAuthToken()}`
     }
   };
 

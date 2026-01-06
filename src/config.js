@@ -58,6 +58,7 @@ function parseDomainFilter(filterString) {
 const config = {
   // Required
   domainFilter: parseDomainFilter(getRequired('DOMAIN_FILTER')),
+  sharedSecret: getRequired('SHARED_SECRET'),
   
   // Optional with defaults
   portProvider: parseInt(getOptional('PORT_PROVIDER', '8888'), 10),

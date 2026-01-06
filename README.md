@@ -42,21 +42,24 @@ flowchart LR
 Each steps needs to be ran on either your firewalla device or your Kubernetes cluster. The headers tell you where you should run it.
 
 ```diff
-- Very Important Notice
-- This project is meant to run on a secure local network. 
-- DO NOT expose the firewalla side of this project to the internet. (default port 8888)
-- At the moment there is no http authorization in place for its API.
-- Which means anyone with access to your firewalla will be able to create/manage/delete dns records.
-- If you port forward the service port, anyone on the internet will be able to do the same.
++ Security Notice
++ This project uses JWT authentication with a shared secret between the webhook proxy
++ and the Firewalla provider. Ensure your SHARED_SECRET is strong and kept secure.
++ Only expose the webhook proxy to trusted networks within your Kubernetes cluster.
 ```
 
-### 1. Install the Webhook Provider (Firewalla) 
+### 1. Install the Webhook Provider (Firewalla)
 
 SSH into your Firewalla as the `pi` user and run:
 
-#### Set your domain filter
+#### Set your domain filter and shared secret
 ```bash
+# Set your domain filter
 echo "home.local,*.home.local" > /tmp/external-dns-domain-filter
+
+# Generate and set a secure shared secret (same secret must be used in Kubernetes)
+openssl rand -hex 32 > /tmp/external-dns-shared-secret
+# Or manually set: echo "your-secure-random-secret-here" > /tmp/external-dns-shared-secret
 ````
 #### Install the provider
 ```bash
@@ -76,16 +79,18 @@ provider:
       repository: ghcr.io/theoutdoorprogrammer/external-dns-firewalla-webhook
       tag: 1.0.0
     env:
-      - name: FIREWALLA_HOST
-        value: "192.168.229.1"
-      - name: FIREWALLA_PROVIDER_PORT
-        value: "8888"
-      - name: FIREWALLA_HEALTH_PORT
-        value: "8080"
-      - name: WEBHOOK_PORT
-        value: "8888"
-      - name: METRICS_PORT
-        value: "8080"
+       - name: FIREWALLA_HOST
+         value: "192.168.229.1"
+       - name: FIREWALLA_PROVIDER_PORT
+         value: "8888"
+       - name: FIREWALLA_HEALTH_PORT
+         value: "8080"
+       - name: WEBHOOK_PORT
+         value: "8888"
+       - name: METRICS_PORT
+         value: "8080"
+       - name: SHARED_SECRET
+         value: "your-secure-shared-secret-here"  # Must match Firewalla shared secret
     livenessProbe:
       httpGet:
         path: /health
@@ -150,6 +155,7 @@ Configure via `/opt/external-dns-firewalla-webhook/.env`:
 
 ```bash
 DOMAIN_FILTER=home.local,*.home.local
+SHARED_SECRET=your-secure-shared-secret-here
 PORT_PROVIDER=8888
 PORT_HEALTH=8080
 DNS_TTL=300
@@ -168,6 +174,7 @@ Environment variables for the sidecar container:
 - `FIREWALLA_HEALTH_PORT`: Health check port on Firewalla (default: 8080)
 - `WEBHOOK_PORT`: Port for webhook proxy to listen on (default: 8888)
 - `METRICS_PORT`: Port for health/metrics endpoints (default: 8080)
+- `SHARED_SECRET`: Shared secret for JWT authentication (must match Firewalla provider)
 
 ## Supported Record Types
 
