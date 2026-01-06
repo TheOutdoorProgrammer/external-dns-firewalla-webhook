@@ -3,6 +3,10 @@
 # Installation script for External-DNS Firewalla Webhook Provider
 # This script installs and configures the webhook provider on Firewalla
 #
+# Usage:
+#   ./scripts/install.sh [domain-filter]
+#   curl -fsSL https://raw.githubusercontent.com/.../install.sh | bash -s -- "example.com,*.example.com"
+#
 set -e
 
 # Colors for output
@@ -10,6 +14,9 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
+
+# Get domain filter from first argument if provided
+DOMAIN_FILTER="${1:-}"
 
 # Configuration
 INSTALL_DIR="/opt/external-dns-firewalla-webhook"
@@ -117,9 +124,31 @@ echo "Dependencies verified (bundled in repository)"
 # Configure environment
 echo -e "${GREEN}[6/9]${NC} Configuring environment..."
 if [ ! -s "$INSTALL_DIR/.env" ] || ! grep -q "DOMAIN_FILTER=" "$INSTALL_DIR/.env" || grep -q "DOMAIN_FILTER=example.com" "$INSTALL_DIR/.env"; then
-    echo ""
-    echo -e "${YELLOW}Please enter your domain filter (comma-separated, e.g., example.com,*.example.com):${NC}"
-    read -p "Domain filter: " DOMAIN_FILTER
+    # If domain filter not provided as argument, try to read from stdin
+    if [ -z "$DOMAIN_FILTER" ]; then
+        # Check if stdin is a terminal (interactive)
+        if [ -t 0 ]; then
+            echo ""
+            echo -e "${YELLOW}Please enter your domain filter (comma-separated, e.g., example.com,*.example.com):${NC}"
+            read -p "Domain filter: " DOMAIN_FILTER
+        else
+            # Not interactive (piped from curl)
+            echo ""
+            echo -e "${RED}ERROR: Domain filter is required but not provided${NC}"
+            echo ""
+            echo "When using the one-line install, provide your domain filter as an argument:"
+            echo ""
+            echo "  curl -fsSL https://raw.githubusercontent.com/.../install.sh | bash -s -- \"example.com,*.example.com\""
+            echo ""
+            echo "Alternatively, run the installation interactively:"
+            echo ""
+            echo "  git clone $GITHUB_REPO"
+            echo "  cd external-dns-firewalla-webhook"
+            echo "  ./scripts/install.sh"
+            echo ""
+            exit 1
+        fi
+    fi
     
     if [ -z "$DOMAIN_FILTER" ]; then
         echo -e "${RED}ERROR: Domain filter cannot be empty${NC}"

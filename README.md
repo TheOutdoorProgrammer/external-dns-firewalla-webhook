@@ -41,8 +41,10 @@ This webhook provider allows Kubernetes external-dns to automatically create, up
 SSH into your Firewalla as the `pi` user and run:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/TheOutdoorProgrammer/external-dns-firewalla-webhook/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/TheOutdoorProgrammer/external-dns-firewalla-webhook/main/scripts/install.sh | bash -s -- "home.local,*.home.local"
 ```
+
+**Important**: Replace `home.local,*.home.local` with your actual domain filter.
 
 **Note**: The script will prompt for your sudo password when needed for system configuration.
 
@@ -50,14 +52,14 @@ This will:
 - Clone the repository (with bundled dependencies)
 - Verify dependencies
 - Configure the service (with sudo)
-- Prompt for your domain filter
+- Set up your domain filter
 - Start the webhook provider
 
 **Note**: Dependencies (Express.js) are bundled in the repository since npm is not available on Firewalla.
 
-### Manual Installation
+### Interactive Installation
 
-If you prefer to review the installation script first:
+If you prefer an interactive installation that prompts for configuration:
 
 1. SSH into your Firewalla device as the `pi` user:
    ```bash
@@ -70,7 +72,7 @@ If you prefer to review the installation script first:
    cd external-dns-firewalla-webhook
    ```
 
-3. Review the installation script:
+3. Review the installation script (optional):
    ```bash
    cat scripts/install.sh
    ```
@@ -80,14 +82,22 @@ If you prefer to review the installation script first:
    ./scripts/install.sh
    ```
    
-   The script will ask for your sudo password when needed.
+   The script will ask for your sudo password and domain filter when needed.
 
-5. Follow the prompts to configure your domain filter (e.g., `home.local,*.home.local`)
+5. Enter your domain filter when prompted (e.g., `home.local,*.home.local`)
 
 6. Verify the service is running:
    ```bash
    sudo systemctl status external-dns-firewalla-webhook
    ```
+
+### Alternative: Pass Domain Filter as Argument
+
+You can also provide the domain filter directly:
+
+```bash
+./scripts/install.sh "home.local,*.home.local"
+```
 
 ### Configuration in Kubernetes
 
