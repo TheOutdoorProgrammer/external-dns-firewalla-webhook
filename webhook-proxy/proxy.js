@@ -52,8 +52,16 @@ function proxyRequest(clientReq, clientRes, targetUrl) {
   console.log(`[${clientReq.method}] ${clientReq.url} -> ${url.href}`);
 
   const proxyReq = http.request(options, (proxyRes) => {
-    // Forward status code and headers
-    clientRes.writeHead(proxyRes.statusCode, proxyRes.headers);
+    // Clean up headers - remove charset from content-type for external-dns compatibility
+    const headers = { ...proxyRes.headers };
+    if (headers['content-type']) {
+      // External-DNS expects exactly: application/external.dns.webhook+json;version=1
+      // Express adds charset which breaks strict validation
+      headers['content-type'] = headers['content-type'].replace(/;\s*charset=[^;]+/, '');
+    }
+    
+    // Forward status code and cleaned headers
+    clientRes.writeHead(proxyRes.statusCode, headers);
     
     // Pipe response body
     proxyRes.pipe(clientRes);
