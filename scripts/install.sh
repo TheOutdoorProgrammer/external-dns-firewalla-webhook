@@ -18,7 +18,6 @@ SERVICE_FILE="external-dns-firewalla-webhook.service"
 DNSMASQ_DIR="/home/pi/.firewalla/config/dnsmasq_local"
 SUDOERS_FILE="/etc/sudoers.d/external-dns-webhook"
 GITHUB_REPO="https://github.com/TheOutdoorProgrammer/external-dns-firewalla-webhook.git"
-TEMP_DIR="/tmp/external-dns-firewalla-webhook-install"
 
 echo "========================================="
 echo "External-DNS Firewalla Webhook Installer"
@@ -34,16 +33,18 @@ if [ "$(whoami)" != "pi" ]; then
    exit 1
 fi
 
-# Check for Node.js
+# Check for Node.js (Firewalla specific path)
 echo -e "${GREEN}[1/11]${NC} Checking Node.js installation..."
-if ! command -v node &> /dev/null; then
-    echo -e "${RED}ERROR: Node.js is not installed${NC}"
-    echo "Please install Node.js 12.14.0 or higher"
+NODE_PATH="/home/pi/firewalla/bin/node"
+
+if [ ! -f "$NODE_PATH" ]; then
+    echo -e "${RED}ERROR: Node.js is not installed at $NODE_PATH${NC}"
+    echo "This script requires the Firewalla node installation"
     exit 1
 fi
 
-NODE_VERSION=$(node -v | sed 's/v//')
-echo "Found Node.js version: $NODE_VERSION"
+NODE_VERSION=$($NODE_PATH -v | sed 's/v//')
+echo "Found Node.js version: $NODE_VERSION at $NODE_PATH"
 
 # Simple version check (requires at least 12.14.0)
 NODE_MAJOR=$(echo $NODE_VERSION | cut -d. -f1)
@@ -64,7 +65,7 @@ if ! command -v git &> /dev/null; then
 fi
 
 # Check if service is already running
-echo -e "${GREEN}[3/11]${NC} Checking for existing installation..."
+echo -e "${GREEN}[3/9]${NC} Checking for existing installation..."
 if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
     echo -e "${YELLOW}WARNING: Service is already running${NC}"
     read -p "Do you want to stop and reinstall? (y/n) " -n 1 -r
@@ -78,42 +79,43 @@ if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
     fi
 fi
 
-# Clone repository to temporary directory
-echo -e "${GREEN}[4/11]${NC} Downloading application from GitHub..."
-rm -rf "$TEMP_DIR"
-git clone --depth 1 "$GITHUB_REPO" "$TEMP_DIR"
-echo "Repository cloned successfully"
-
-# Create installation directory and copy files
-echo -e "${GREEN}[5/11]${NC} Installing application files..."
-sudo mkdir -p "$INSTALL_DIR"
-
-# Copy all necessary files from temp directory
-sudo cp -r "$TEMP_DIR/src" "$INSTALL_DIR/"
-sudo cp -r "$TEMP_DIR/systemd" "$INSTALL_DIR/"
-sudo cp "$TEMP_DIR/package.json" "$INSTALL_DIR/"
-sudo cp "$TEMP_DIR/package-lock.json" "$INSTALL_DIR/" 2>/dev/null || true
-
-# Copy .env.example if .env doesn't exist
-if [ ! -f "$INSTALL_DIR/.env" ]; then
-    sudo cp "$TEMP_DIR/.env.example" "$INSTALL_DIR/.env"
-    echo "Created .env file from .env.example"
+# Check if directory already exists
+if [ -d "$INSTALL_DIR" ]; then
+    echo -e "${YELLOW}WARNING: Installation directory already exists${NC}"
+    read -p "Do you want to remove it and reinstall? (y/n) " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        sudo rm -rf "$INSTALL_DIR"
+    else
+        echo "Installation cancelled"
+        exit 0
+    fi
 fi
+
+# Clone repository directly to /opt
+echo -e "${GREEN}[4/9]${NC} Cloning repository to $INSTALL_DIR..."
+sudo git clone --depth 1 "$GITHUB_REPO" "$INSTALL_DIR"
+echo "Repository cloned successfully"
 
 # Set ownership to pi user
 sudo chown -R pi:pi "$INSTALL_DIR"
 
-# Clean up temp directory
-rm -rf "$TEMP_DIR"
+# Create .env file if it doesn't exist
+if [ ! -f "$INSTALL_DIR/.env" ]; then
+    cp "$INSTALL_DIR/.env.example" "$INSTALL_DIR/.env"
+    echo "Created .env file from .env.example"
+fi
 
-# Install npm dependencies
-echo -e "${GREEN}[6/11]${NC} Installing Node.js dependencies..."
-cd "$INSTALL_DIR"
-npm ci --production --no-optional 2>&1 | grep -v "^npm WARN" || true
-echo "Dependencies installed"
+# Verify dependencies are present
+echo -e "${GREEN}[5/9]${NC} Verifying dependencies..."
+if [ ! -d "$INSTALL_DIR/node_modules" ]; then
+    echo -e "${RED}ERROR: node_modules not found. The repository may be incomplete.${NC}"
+    exit 1
+fi
+echo "Dependencies verified (bundled in repository)"
 
 # Configure environment
-echo -e "${GREEN}[7/11]${NC} Configuring environment..."
+echo -e "${GREEN}[6/9]${NC} Configuring environment..."
 if [ ! -s "$INSTALL_DIR/.env" ] || ! grep -q "DOMAIN_FILTER=" "$INSTALL_DIR/.env" || grep -q "DOMAIN_FILTER=example.com" "$INSTALL_DIR/.env"; then
     echo ""
     echo -e "${YELLOW}Please enter your domain filter (comma-separated, e.g., example.com,*.example.com):${NC}"
@@ -132,20 +134,19 @@ else
 fi
 
 # Create dnsmasq directory
-echo -e "${GREEN}[8/11]${NC} Creating dnsmasq directory..."
+echo -e "${GREEN}[7/9]${NC} Creating dnsmasq directory..."
 mkdir -p "$DNSMASQ_DIR"
 echo "Directory created: $DNSMASQ_DIR"
 
 # Install systemd service
-echo -e "${GREEN}[9/11]${NC} Installing systemd service..."
+echo -e "${GREEN}[8/9]${NC} Installing systemd service..."
 echo "Requesting sudo access to install systemd service..."
 sudo cp "$INSTALL_DIR/systemd/$SERVICE_FILE" "/etc/systemd/system/$SERVICE_FILE"
 sudo systemctl daemon-reload
 echo "Systemd service installed"
 
 # Configure sudoers for DNS service restart
-echo -e "${GREEN}[10/11]${NC} Configuring sudo permissions..."
-echo "Setting up passwordless sudo for DNS service restart..."
+echo "Configuring sudo permissions for DNS service restart..."
 sudo bash -c "cat > '$SUDOERS_FILE' << 'EOF'
 # Allow pi user to restart firerouter_dns for external-dns-firewalla-webhook
 pi ALL=(ALL) NOPASSWD: /bin/systemctl restart firerouter_dns
@@ -154,7 +155,7 @@ sudo chmod 0440 "$SUDOERS_FILE"
 echo "Sudo permissions configured"
 
 # Enable and start service
-echo -e "${GREEN}[11/11]${NC} Starting service..."
+echo -e "${GREEN}[9/9]${NC} Starting service..."
 sudo systemctl enable "$SERVICE_NAME"
 sudo systemctl start "$SERVICE_NAME"
 

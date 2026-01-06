@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/home/pi/firewalla/bin/node
 /**
  * External-DNS Firewalla Webhook Provider
  * Main Express.js server

@@ -29,9 +29,9 @@ This webhook provider allows Kubernetes external-dns to automatically create, up
 ## Prerequisites
 
 - **Firewalla device** (Gold, Purple, Red, or any model with SSH access)
-- **Firewalla firmware** with systemd and Node.js 12.14.0+ (pre-installed on most models)
+- **Firewalla firmware** with Node.js at `/home/pi/firewalla/bin/node` (pre-installed on most models)
 - **Kubernetes cluster** with external-dns installed
-- **SSH access** to your Firewalla device
+- **SSH access** to your Firewalla device as the `pi` user
 - **Sudo privileges** on Firewalla
 
 ## Quick Start
@@ -47,11 +47,13 @@ curl -fsSL https://raw.githubusercontent.com/TheOutdoorProgrammer/external-dns-f
 **Note**: The script will prompt for your sudo password when needed for system configuration.
 
 This will:
-- Clone the repository
-- Install all dependencies
+- Clone the repository (with bundled dependencies)
+- Verify dependencies
 - Configure the service (with sudo)
 - Prompt for your domain filter
 - Start the webhook provider
+
+**Note**: Dependencies (Express.js) are bundled in the repository since npm is not available on Firewalla.
 
 ### Manual Installation
 
@@ -404,9 +406,9 @@ txt-record=external-dns-a-example.home.local,"heritage=external-dns,external-dns
    sudo journalctl -u external-dns-firewalla-webhook -n 50
    ```
 
-2. Verify Node.js is installed:
+2. Verify Node.js is installed at the Firewalla path:
    ```bash
-   node -v  # Should be 12.14.0 or higher
+   /home/pi/firewalla/bin/node -v  # Should be 12.14.0 or higher
    ```
 
 3. Check the .env file:

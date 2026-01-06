@@ -1,5 +1,5 @@
 # Node.js
-node_modules/
+# Note: node_modules is NOT ignored - we bundle express for Firewalla
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

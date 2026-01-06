@@ -1,8 +1,11 @@
 {
   "name": "external-dns-firewalla-webhook",
   "version": "1.0.0",
-  "description": "External-DNS webhook provider for Firewalla - manages DNS records via dnsmasq",
+  "description": "External-DNS webhook provider for Firewalla - manages DNS records via dnsmasq (node_modules bundled for Firewalla)",
   "main": "src/server.js",
+  "bundledDependencies": [
+    "express"
+  ],
   "scripts": {
     "start": "node src/server.js",
     "dev": "NODE_ENV=development node src/server.js"
