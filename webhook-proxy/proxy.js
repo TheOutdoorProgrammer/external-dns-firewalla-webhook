@@ -98,8 +98,28 @@ const metricsServer = http.createServer((req, res) => {
   
   // Health check endpoint
   if (url.pathname === '/health' || url.pathname === '/healthz') {
-    // Proxy to Firewalla health endpoint
-    proxyRequest(req, res, FIREWALLA_HEALTH_URL);
+    // Check Firewalla health endpoint directly
+    const healthCheck = http.get(`${FIREWALLA_HEALTH_URL}/healthz`, (healthRes) => {
+      if (healthRes.statusCode === 200) {
+        res.writeHead(200, { 'Content-Type': 'text/plain' });
+        res.end('ok');
+      } else {
+        res.writeHead(503, { 'Content-Type': 'text/plain' });
+        res.end('unhealthy');
+      }
+    });
+    
+    healthCheck.on('error', (err) => {
+      console.error('Health check failed:', err.message);
+      res.writeHead(503, { 'Content-Type': 'text/plain' });
+      res.end('unhealthy');
+    });
+    
+    healthCheck.setTimeout(5000, () => {
+      healthCheck.destroy();
+      res.writeHead(503, { 'Content-Type': 'text/plain' });
+      res.end('unhealthy - timeout');
+    });
     return;
   }
   

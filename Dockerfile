@@ -13,13 +13,11 @@ WORKDIR /app
 # Copy proxy script
 COPY webhook-proxy/proxy.js .
 
-# Create non-root user
-RUN addgroup -g 1000 webhook && \
-    adduser -D -u 1000 -G webhook webhook && \
-    chown -R webhook:webhook /app
+# Create non-root user (use existing node user from base image)
+RUN chown -R node:node /app
 
 # Switch to non-root user
-USER webhook
+USER node
 
 # Expose ports
 # 8888: Webhook API (external-dns talks to this)
