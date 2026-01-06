@@ -1,0 +1,28 @@
+[Unit]
+Description=External-DNS Firewalla Webhook Provider
+Documentation=https://github.com/TheOutdoorProgrammer/external-dns-firewalla-webhook
+After=network.target firerouter_dns.service
+Wants=network.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/opt/external-dns-firewalla-webhook
+EnvironmentFile=/opt/external-dns-firewalla-webhook/.env
+ExecStart=node /opt/external-dns-firewalla-webhook/src/server.js
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=external-dns-firewalla-webhook
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/pi/.firewalla/config/dnsmasq_local
+
+[Install]
+WantedBy=multi-user.target

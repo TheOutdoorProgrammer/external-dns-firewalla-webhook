@@ -1,0 +1,31 @@
+{
+  "name": "external-dns-firewalla-webhook",
+  "version": "1.0.0",
+  "description": "External-DNS webhook provider for Firewalla - manages DNS records via dnsmasq",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "NODE_ENV=development node src/server.js"
+  },
+  "engines": {
+    "node": ">=12.14.0"
+  },
+  "keywords": [
+    "external-dns",
+    "webhook",
+    "firewalla",
+    "dns",
+    "kubernetes",
+    "dnsmasq"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/TheOutdoorProgrammer/external-dns-firewalla-webhook.git"
+  },
+  "author": "TheOutdoorProgrammer",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.17.1"
+  },
+  "devDependencies": {}
+}
