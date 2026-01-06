@@ -13,10 +13,17 @@ const validator = require('../utils/validator');
 function adjustEndpoints(req, res) {
   const endpoints = req.body;
   const acceptHeader = req.get('Accept');
+  const contentType = req.get('Content-Type');
   
-  logger.debug('Adjust endpoints request received', { 
-    count: Array.isArray(endpoints) ? endpoints.length : 0,
-    accept: acceptHeader
+  // Debug logging to see what we're actually receiving
+  logger.info('Adjust endpoints request received', { 
+    bodyType: typeof endpoints,
+    isArray: Array.isArray(endpoints),
+    bodyKeys: endpoints && typeof endpoints === 'object' ? Object.keys(endpoints) : null,
+    bodyLength: Array.isArray(endpoints) ? endpoints.length : null,
+    contentType: contentType,
+    accept: acceptHeader,
+    rawBody: JSON.stringify(endpoints).substring(0, 500) // First 500 chars
   });
   
   // Validate Accept header
@@ -27,7 +34,10 @@ function adjustEndpoints(req, res) {
   
   // Validate input
   if (!Array.isArray(endpoints)) {
-    logger.warn('Invalid request body for adjust endpoints (not an array)');
+    logger.warn('Invalid request body for adjust endpoints (not an array)', {
+      bodyType: typeof endpoints,
+      bodyContent: JSON.stringify(endpoints)
+    });
     return res.status(400).json({ error: 'Request body must be an array of endpoints' });
   }
   

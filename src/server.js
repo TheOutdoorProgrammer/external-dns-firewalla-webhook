@@ -17,8 +17,11 @@ const adjustEndpoints = require('./controllers/adjustEndpoints');
 const providerApp = express();
 const healthApp = express();
 
-// Middleware
-providerApp.use(express.json({ limit: '10mb' }));
+// Middleware - configure JSON parser to accept external-dns content type
+providerApp.use(express.json({ 
+  limit: '10mb',
+  type: ['application/json', 'application/external.dns.webhook+json*']
+}));
 healthApp.use(express.json());
 
 // Request logging middleware
