@@ -16,8 +16,8 @@ COPY webhook-proxy/proxy.js .
 # Create non-root user (use existing node user from base image)
 RUN chown -R node:node /app
 
-# Switch to non-root user
-USER node
+# Switch to non-root user using numeric UID for Kubernetes runAsNonRoot compatibility
+USER 1000:1000
 
 # Expose ports
 # 8888: Webhook API (external-dns talks to this)
