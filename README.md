@@ -35,9 +35,18 @@ graph TB
 ### How It Works
 
 1. **External-DNS** running in your Kubernetes cluster detects services/ingresses that need DNS records
-2. **Webhook Proxy** sidecar container receives requests from external-dns and forwards them to Firewalla
-3. **Firewalla Webhook Provider** translates these requests into dnsmasq configuration files
+2. **Webhook Proxy** sidecar container (running in Kubernetes) receives requests from external-dns and forwards them to Firewalla
+3. **Firewalla Webhook Provider** (running as systemd service on Firewalla) translates these requests into dnsmasq configuration files
 4. **DNS records** are immediately available on your network via Firewalla's DNS server
+
+### Deployment Model
+
+This project consists of two components that work together:
+
+- **Firewalla Webhook Provider** (Node.js service): Runs directly on your Firewalla device via systemd. This is the actual DNS management service that writes dnsmasq configs.
+- **Webhook Proxy** (Docker container): Runs as a sidecar in your Kubernetes external-dns pod. This is a lightweight HTTP proxy that forwards requests from external-dns to the Firewalla provider.
+
+**You need BOTH components deployed** - the provider on Firewalla, and the proxy in Kubernetes.
 
 ### Features
 
@@ -62,7 +71,11 @@ graph TB
 
 ## Quick Start
 
-### One-Line Installation
+### Step 1: Install Webhook Provider on Firewalla
+
+First, install the webhook provider service on your Firewalla device:
+
+#### One-Line Installation
 
 SSH into your Firewalla as the `pi` user and run these two commands:
 
@@ -128,49 +141,86 @@ If you prefer to review the installation script first:
    sudo systemctl status external-dns-firewalla-webhook
    ```
 
-### Configuration in Kubernetes
+### Step 2: Configure External-DNS in Kubernetes
+
+After the webhook provider is running on Firewalla, configure external-dns in your Kubernetes cluster to use the webhook proxy sidecar:
 
 #### Using Helm Chart (Recommended)
 
-Add this configuration to your `external-dns` Helm values:
+The external-dns Helm chart supports webhook providers via a sidecar container pattern. The Docker image (`ghcr.io/theoutdoorprogrammer/external-dns-firewalla-webhook`) is a lightweight HTTP proxy that forwards requests from external-dns to your Firewalla device.
+
+Add this configuration to your `external-dns` Helm values (save as `values.yaml`):
 
 ```yaml
+# Use webhook provider
 provider:
   name: webhook
   webhook:
     image:
-      repository: registry.k8s.io/external-dns/external-dns
-      tag: v0.14.0
+      repository: ghcr.io/theoutdoorprogrammer/external-dns-firewalla-webhook
+      tag: latest  # Or use a specific version tag like 'v1.0.0' or commit SHA like 'main-abc1234'
     env:
-      - name: WEBHOOK_HOST
-        value: "<firewalla-ip>:8888"
+      - name: FIREWALLA_HOST
+        value: "192.168.229.1"  # Your Firewalla IP
+      - name: FIREWALLA_PROVIDER_PORT
+        value: "8888"
+      - name: FIREWALLA_HEALTH_PORT
+        value: "8080"
+      - name: WEBHOOK_PORT
+        value: "8888"
+      - name: METRICS_PORT
+        value: "8080"
     livenessProbe:
       httpGet:
-        path: /healthz
+        path: /health
         port: 8080
       initialDelaySeconds: 10
       timeoutSeconds: 5
     readinessProbe:
       httpGet:
-        path: /healthz
+        path: /ready
         port: 8080
       initialDelaySeconds: 10
       timeoutSeconds: 5
 
-# Your domain filter (must match Firewalla webhook config)
+# Domain filter - must match Firewalla webhook configuration
 domainFilters:
-  - home.local
+  - stout.zone
 
-# Source configuration
+# Source configuration - what Kubernetes resources to watch
 sources:
   - service
   - ingress
 
-# Recommended settings
-policy: sync
-registry: txt
-txtOwnerId: my-k8s-cluster
+# Policy settings
+policy: sync  # sync = manage records, upsert-only = only create/update
+registry: txt  # Use TXT records to track ownership
+txtOwnerId: home-k8s-cluster
 txtPrefix: external-dns-
+
+# Logging
+logLevel: info
+logFormat: text
+
+# Resources
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 128Mi
+
+# Single replica is sufficient for home lab
+replicaCount: 1
+
+# Service account
+serviceAccount:
+  create: true
+
+# RBAC
+rbac:
+  create: true
 ```
 
 Install or upgrade external-dns:
@@ -178,12 +228,15 @@ Install or upgrade external-dns:
 ```bash
 helm repo add external-dns https://kubernetes-sigs.github.io/external-dns/
 helm upgrade --install external-dns external-dns/external-dns \
+  --version 1.20.0 \
   -f values.yaml \
   -n external-dns \
   --create-namespace
 ```
 
 #### Using Raw Kubernetes Manifests
+
+**Note**: The Helm chart method is strongly recommended as it properly configures the webhook sidecar container. If you must use raw manifests, here's a simplified example:
 
 ```yaml
 apiVersion: apps/v1
@@ -209,29 +262,77 @@ spec:
         args:
         - --source=service
         - --source=ingress
-        - --domain-filter=home.local
+        - --domain-filter=stout.zone
         - --provider=webhook
-        - --webhook-server=http://<firewalla-ip>:8888
         - --policy=sync
         - --registry=txt
         - --txt-owner-id=my-k8s-cluster
         - --txt-prefix=external-dns-
         - --log-level=info
+      - name: webhook
+        image: ghcr.io/theoutdoorprogrammer/external-dns-firewalla-webhook:main-f1e0b5e
+        env:
+        - name: FIREWALLA_HOST
+          value: "192.168.229.1"
+        - name: FIREWALLA_PROVIDER_PORT
+          value: "8888"
+        - name: FIREWALLA_HEALTH_PORT
+          value: "8080"
+        - name: WEBHOOK_PORT
+          value: "8888"
+        - name: METRICS_PORT
+          value: "8080"
+        ports:
+        - name: http
+          containerPort: 8888
+          protocol: TCP
+        - name: http-metrics
+          containerPort: 8080
+          protocol: TCP
         livenessProbe:
           httpGet:
-            path: /healthz
+            path: /health
             port: 8080
           initialDelaySeconds: 10
+          timeoutSeconds: 5
         readinessProbe:
           httpGet:
-            path: /healthz
+            path: /ready
             port: 8080
           initialDelaySeconds: 10
+          timeoutSeconds: 5
 ```
 
 ### Testing
 
-1. Create a test service in Kubernetes:
+1. **Test Webhook Provider on Firewalla**:
+```bash
+# SSH to Firewalla
+ssh pi@<firewalla-ip>
+
+# Check if service is running
+sudo systemctl status external-dns-firewalla-webhook
+
+# Test health endpoint directly
+curl http://localhost:8080/healthz
+
+# Test provider endpoint
+curl http://localhost:8888/
+```
+
+2. **Test Webhook Proxy in Kubernetes**:
+```bash
+# Check if external-dns pod is running
+kubectl get pods -n external-dns
+
+# Test webhook proxy health from within the cluster
+kubectl exec -n external-dns -it deployment/external-dns -- curl http://localhost:8080/health
+
+# Check external-dns logs for webhook communication
+kubectl logs -n external-dns -l app=external-dns
+```
+
+3. **Create a test service in Kubernetes**:
 
 ```yaml
 apiVersion: v1
@@ -239,7 +340,7 @@ kind: Service
 metadata:
   name: nginx-test
   annotations:
-    external-dns.alpha.kubernetes.io/hostname: nginx.home.local
+    external-dns.alpha.kubernetes.io/hostname: nginx.stout.zone
 spec:
   type: LoadBalancer
   ports:
@@ -249,39 +350,51 @@ spec:
     app: nginx
 ```
 
-2. Apply the service:
+4. **Apply the service**:
 ```bash
 kubectl apply -f test-service.yaml
 ```
 
-3. Check external-dns logs:
+5. **Monitor the process**:
 ```bash
-kubectl logs -n external-dns -l app=external-dns
+# Watch external-dns logs in real-time
+kubectl logs -n external-dns -l app=external-dns -f
+
+# Watch webhook provider logs on Firewalla
+ssh pi@<firewalla-ip> "sudo journalctl -u external-dns-firewalla-webhook -f"
 ```
 
-4. Verify DNS record was created on Firewalla:
+6. **Verify DNS record was created on Firewalla**:
 ```bash
 # SSH to Firewalla
 ssh pi@<firewalla-ip>
 
 # Check the DNS record file
-cat ~/.firewalla/config/dnsmasq_local/nginx.home.local
+cat ~/.firewalla/config/dnsmasq_local/nginx.stout.zone
 
 # Test DNS resolution
-dig @localhost nginx.home.local
+dig @localhost nginx.stout.zone
+```
+
+7. **Test from another device on your network**:
+```bash
+# From any device on your network
+nslookup nginx.stout.zone <firewalla-ip>
 ```
 
 ## Configuration
 
 ### Environment Variables
 
+#### Firewalla Webhook Provider (Systemd Service)
+
 The webhook provider is configured via the `.env` file located at `/opt/external-dns-firewalla-webhook/.env`.
 
-#### Required Variables
+**Required Variables:**
 
-- `DOMAIN_FILTER`: Comma-separated list of domains to manage (e.g., `home.local,*.home.local`)
+- `DOMAIN_FILTER`: Comma-separated list of domains to manage (e.g., `stout.zone,*.stout.zone`)
 
-#### Optional Variables
+**Optional Variables:**
 
 - `PORT_PROVIDER`: Provider API port (default: `8888`)
 - `PORT_HEALTH`: Health check port (default: `8080`)
@@ -289,6 +402,16 @@ The webhook provider is configured via the `.env` file located at `/opt/external
 - `DNSMASQ_DIR`: Path to dnsmasq config directory (default: `/home/pi/.firewalla/config/dnsmasq_local`)
 - `LOG_LEVEL`: Log level - `error`, `warn`, `info`, or `debug` (default: `info`)
 - `DRY_RUN`: If `true`, don't make actual changes (default: `false`)
+
+#### Webhook Proxy (Kubernetes Sidecar)
+
+The webhook proxy container uses these environment variables (configured in Helm values or Kubernetes manifests):
+
+- `FIREWALLA_HOST`: IP address of your Firewalla device (default: `192.168.229.1`)
+- `FIREWALLA_PROVIDER_PORT`: Provider API port on Firewalla (default: `8888`)
+- `FIREWALLA_HEALTH_PORT`: Health check port on Firewalla (default: `8080`)
+- `WEBHOOK_PORT`: Port for webhook proxy to listen on (default: `8888`)
+- `METRICS_PORT`: Port for health/metrics endpoints (default: `8080`)
 
 ### Editing Configuration
 
@@ -462,25 +585,41 @@ txt-record=external-dns-a-example.home.local,"heritage=external-dns,external-dns
 
 ### DNS Records Not Created
 
-1. Check external-dns logs in Kubernetes:
-   ```bash
-   kubectl logs -n external-dns -l app=external-dns --tail=100
-   ```
+1. **Check external-dns logs in Kubernetes**:
+    ```bash
+    kubectl logs -n external-dns -l app=external-dns --tail=100
+    ```
 
-2. Verify webhook connectivity from Kubernetes:
-   ```bash
-   # From a pod in your cluster
-   curl http://<firewalla-ip>:8888/healthz
-   ```
+2. **Verify webhook proxy is running**:
+    ```bash
+    # Check if webhook container is healthy
+    kubectl get pods -n external-dns
+    kubectl describe pod -n external-dns <external-dns-pod-name>
+    ```
 
-3. Check webhook provider logs:
-   ```bash
-   sudo journalctl -u external-dns-firewalla-webhook -f
-   ```
+3. **Test webhook proxy connectivity**:
+    ```bash
+    # Test from within the external-dns pod
+    kubectl exec -n external-dns -it deployment/external-dns -c webhook -- curl http://localhost:8080/health
 
-4. Verify domain filter matches:
-   - Webhook `.env`: `DOMAIN_FILTER=home.local`
-   - External-DNS: `--domain-filter=home.local`
+    # Test connectivity to Firewalla from the pod
+    kubectl exec -n external-dns -it deployment/external-dns -c webhook -- curl http://<firewalla-ip>:8080/healthz
+    ```
+
+4. **Check webhook provider logs on Firewalla**:
+    ```bash
+    sudo journalctl -u external-dns-firewalla-webhook -f
+    ```
+
+5. **Verify domain filter matches**:
+    - Firewalla `.env`: `DOMAIN_FILTER=stout.zone`
+    - External-DNS: `--domain-filter=stout.zone` or `domainFilters: [stout.zone]`
+
+6. **Check network connectivity**:
+    ```bash
+    # From external-dns pod, test Firewalla reachability
+    kubectl exec -n external-dns -it deployment/external-dns -c webhook -- ping -c 3 <firewalla-ip>
+    ```
 
 ### DNS Service Restart Fails
 
@@ -499,9 +638,28 @@ txt-record=external-dns-a-example.home.local,"heritage=external-dns,external-dns
    cat /etc/sudoers.d/external-dns-webhook
    ```
 
+### Webhook Proxy Health Check Issues
+
+If the webhook proxy sidecar shows unhealthy readiness/liveness probes:
+
+1. **Check proxy logs**:
+    ```bash
+    kubectl logs -n external-dns -c webhook <external-dns-pod-name>
+    ```
+
+2. **Verify Firewalla connectivity from proxy**:
+    ```bash
+    kubectl exec -n external-dns -c webhook <external-dns-pod-name> -- curl -v http://<firewalla-ip>:8080/healthz
+    ```
+
+3. **Check environment variables**:
+    ```bash
+    kubectl exec -n external-dns -c webhook <external-dns-pod-name> -- env | grep -E "(FIREWALLA|WEBHOOK|METRICS)"
+    ```
+
 ### Port Already in Use
 
-If ports 8888 or 8080 are already in use:
+If ports 8888 or 8080 are already in use on Firewalla:
 
 1. Edit the .env file:
    ```bash
