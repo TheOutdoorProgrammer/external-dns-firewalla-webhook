@@ -39,21 +39,24 @@ flowchart LR
 
 ## Quick Start
 
-### 1. Install the Webhook Provider on Firewalla
+Each steps needs to be ran on either your firewalla device or your Kubernetes cluster. The headers tell you where you should run it.
+
+### 1. Install the Webhook Provider (Firewalla) 
 
 SSH into your Firewalla as the `pi` user and run:
 
+#### Set your domain filter
 ```bash
-# Set your domain filter
 echo "home.local,*.home.local" > /tmp/external-dns-domain-filter
-
-# Install the provider
+````
+#### Install the provider
+```bash
 curl -fsSL https://raw.githubusercontent.com/TheOutdoorProgrammer/external-dns-firewalla-webhook/main/scripts/install.sh | bash
 ```
 
-### 2. Configure External-DNS
+### 2. Configure External-DNS (Kubernetes)
 
-Use the Helm values from the working example in `../flux/clusters/home/external-dns/hr.yaml`:
+Use the example helm values:
 
 ```yaml
 # Use webhook provider
@@ -243,5 +246,4 @@ api.home.local
 
 ## License
 
-MIT</content>
-<parameter name="filePath">README.md
+MIT
