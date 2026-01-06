@@ -48,7 +48,7 @@ SSH into your Firewalla as the `pi` user and run:
 echo "home.local,*.home.local" > /tmp/external-dns-domain-filter
 
 # Install the provider
-curl -fsSL https://raw.githubusercontent.com/TheOutdoorProgrammer/external-dns-firewalla-webhook/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/TheOutdoorProgrammer/external-dns-firewalla-webhook/v1.0.0/scripts/install.sh | bash
 ```
 
 ### 2. Configure External-DNS
@@ -62,7 +62,7 @@ provider:
   webhook:
     image:
       repository: ghcr.io/theoutdoorprogrammer/external-dns-firewalla-webhook
-      tag: main-89268b7
+      tag: v1.0.0
     env:
       - name: FIREWALLA_HOST
         value: "192.168.229.1"
