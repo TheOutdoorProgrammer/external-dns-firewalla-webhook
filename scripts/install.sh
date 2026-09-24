@@ -131,7 +131,7 @@ install_provider() (
     fi
     sudo systemctl daemon-reload
     if [[ "$(sudo systemctl show --property=NoNewPrivileges --value "$SERVICE_NAME")" != no ]]; then
-        fail 'Effective NoNewPrivileges would block the DNS restart helper; provider was not started.'
+        fail 'Configured NoNewPrivileges would block the DNS restart helper; provider was not started.'
         return 1
     fi
     sudo systemctl enable "$SERVICE_NAME"

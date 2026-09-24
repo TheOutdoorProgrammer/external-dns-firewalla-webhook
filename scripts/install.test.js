@@ -99,7 +99,7 @@ test('dangling install symlink is rejected', root => fs.symlinkSync('missing', p
 test('existing systemd unit is rejected', root => fs.writeFileSync(path.join(root, 'units/provider.service'), 'keep'), rejected);
 test('registered service is rejected', root => fs.writeFileSync(path.join(root, 'registered'), ''), rejected);
 test('failed sudoers validation precedes installation', root => fs.writeFileSync(path.join(root, 'invalid-sudoers'), ''), rejected);
-test('effective NoNewPrivileges prevents enable and start', root => fs.writeFileSync(path.join(root, 'no-new-privileges'), ''), (_root, result, commands) => {
+test('configured NoNewPrivileges prevents enable and start', root => fs.writeFileSync(path.join(root, 'no-new-privileges'), ''), (_root, result, commands) => {
   assert.notStrictEqual(result.status, 0, result.stdout);
   assert(commands.includes('systemctl daemon-reload'));
   assert(!commands.includes('systemctl enable'));
