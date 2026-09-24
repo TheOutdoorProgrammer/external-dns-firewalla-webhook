@@ -1,244 +1,137 @@
 #!/bin/bash
-#
-# Installation script for External-DNS Firewalla Webhook Provider
-# This script installs and configures the webhook provider on Firewalla
-#
-# Usage:
-#   1. Create config file with your domain filter:
-#      echo "home.local,*.home.local" > /tmp/external-dns-domain-filter
-#   2. Run the installation:
-#      curl -fsSL https://raw.githubusercontent.com/.../install.sh | bash
-#
-set -e
+set +x
+set -euo pipefail
+umask 077
 
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
-
-# Configuration
 INSTALL_DIR="/opt/external-dns-firewalla-webhook"
 SERVICE_NAME="external-dns-firewalla-webhook"
-SERVICE_FILE="external-dns-firewalla-webhook.service"
+SERVICE_FILE="$SERVICE_NAME.service"
+UNIT_FILE="/etc/systemd/system/$SERVICE_FILE"
 DNSMASQ_DIR="/home/pi/.firewalla/config/dnsmasq_local"
 SUDOERS_FILE="/etc/sudoers.d/external-dns-webhook"
 GITHUB_REPO="https://github.com/TheOutdoorProgrammer/external-dns-firewalla-webhook.git"
-CONFIG_FILE="/tmp/external-dns-domain-filter"
-SECRET_FILE="/tmp/external-dns-shared-secret"
-
-echo "========================================="
-echo "External-DNS Firewalla Webhook Installer"
-echo "========================================="
-echo ""
-
-# Check for config files first
-if [ ! -f "$CONFIG_FILE" ] || [ ! -f "$SECRET_FILE" ]; then
-    echo -e "${RED}ERROR: Configuration files not found${NC}"
-    echo ""
-    echo "Before running this installer, you must create two config files:"
-    echo "1. Domain filter configuration"
-    echo "2. Shared secret for authentication"
-    echo ""
-    echo "Step 1: Create the domain filter config file:"
-    echo "  echo \"home.local,*.home.local\" > $CONFIG_FILE"
-    echo ""
-    echo "Step 2: Create the shared secret config file:"
-    echo "  openssl rand -hex 32 > $SECRET_FILE"
-    echo "  # Or use: echo \"your-secure-random-secret-here\" > $SECRET_FILE"
-    echo ""
-    echo "Step 3: Run the installer:"
-    echo "  curl -fsSL https://raw.githubusercontent.com/TheOutdoorProgrammer/external-dns-firewalla-webhook/main/scripts/install.sh | bash"
-    echo ""
-    echo "For interactive installation:"
-    echo "  git clone $GITHUB_REPO"
-    echo "  cd external-dns-firewalla-webhook"
-    echo "  echo \"home.local,*.home.local\" > $CONFIG_FILE"
-    echo "  openssl rand -hex 32 > $SECRET_FILE"
-    echo "  ./scripts/install.sh"
-    echo ""
-    exit 1
-fi
-
-# Read domain filter from config file
-DOMAIN_FILTER=$(cat "$CONFIG_FILE" | tr -d '\n\r' | xargs)
-
-if [ -z "$DOMAIN_FILTER" ]; then
-    echo -e "${RED}ERROR: Domain filter config file is empty${NC}"
-    echo ""
-    echo "The file $CONFIG_FILE exists but contains no domain filter."
-    echo "Please add your domain filter to the file:"
-    echo "  echo \"home.local,*.home.local\" > $CONFIG_FILE"
-    echo ""
-    exit 1
-fi
-
-# Read shared secret from config file
-SHARED_SECRET=$(cat "$SECRET_FILE" | tr -d '\n\r' | xargs)
-
-if [ -z "$SHARED_SECRET" ]; then
-    echo -e "${RED}ERROR: Shared secret config file is empty${NC}"
-    echo ""
-    echo "The file $SECRET_FILE exists but contains no shared secret."
-    echo "Please add your shared secret to the file:"
-    echo "  openssl rand -hex 32 > $SECRET_FILE"
-    echo ""
-    exit 1
-fi
-
-echo -e "${GREEN}Found domain filter:${NC} $DOMAIN_FILTER"
-echo -e "${GREEN}Found shared secret:${NC} ${SHARED_SECRET:0:8}..."
-echo ""
-
-# Check if running as pi user
-if [ "$(whoami)" != "pi" ]; then 
-   echo -e "${RED}ERROR: Please run as pi user (not root)${NC}"
-   echo "Usage: ./scripts/install.sh"
-   echo ""
-   echo "The script will ask for sudo password when needed."
-   exit 1
-fi
-
-# Check for Node.js (Firewalla specific path)
-echo -e "${GREEN}[1/11]${NC} Checking Node.js installation..."
 NODE_PATH="/home/pi/firewalla/bin/node"
 
-if [ ! -f "$NODE_PATH" ]; then
-    echo -e "${RED}ERROR: Node.js is not installed at $NODE_PATH${NC}"
-    echo "This script requires the Firewalla node installation"
-    exit 1
-fi
+fail() {
+    printf 'ERROR: %s\n' "$*" >&2
+    return 1
+}
 
-NODE_VERSION=$($NODE_PATH -v | sed 's/v//')
-echo "Found Node.js version: $NODE_VERSION at $NODE_PATH"
-
-# Simple version check (requires at least 12.14.0)
-NODE_MAJOR=$(echo $NODE_VERSION | cut -d. -f1)
-NODE_MINOR=$(echo $NODE_VERSION | cut -d. -f2)
-
-if [ "$NODE_MAJOR" -lt 12 ] || ([ "$NODE_MAJOR" -eq 12 ] && [ "$NODE_MINOR" -lt 14 ]); then
-    echo -e "${RED}ERROR: Node.js version 12.14.0 or higher is required${NC}"
-    echo "Current version: $NODE_VERSION"
-    exit 1
-fi
-
-# Check for git
-echo -e "${GREEN}[2/11]${NC} Checking for git installation..."
-if ! command -v git &> /dev/null; then
-    echo -e "${RED}ERROR: git is not installed${NC}"
-    echo "Please install git: sudo apt-get install git"
-    exit 1
-fi
-
-# Check if service is already running
-echo -e "${GREEN}[3/9]${NC} Checking for existing installation..."
-if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
-    echo -e "${YELLOW}WARNING: Service is already running${NC}"
-    read -p "Do you want to stop and reinstall? (y/n) " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        echo "Stopping service..."
-        sudo systemctl stop "$SERVICE_NAME" || true
-    else
-        echo "Installation cancelled"
-        exit 0
+check_destination() {
+    if [[ -e "$INSTALL_DIR" || -L "$INSTALL_DIR" || -e "$UNIT_FILE" || -L "$UNIT_FILE" ]]; then
+        fail 'An installation or systemd unit already exists; inspect and preserve it before restoring.'
+        return 1
     fi
-fi
-
-# Check if directory already exists
-if [ -d "$INSTALL_DIR" ]; then
-    echo -e "${YELLOW}WARNING: Installation directory already exists${NC}"
-    read -p "Do you want to remove it and reinstall? (y/n) " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        sudo rm -rf "$INSTALL_DIR"
-    else
-        echo "Installation cancelled"
-        exit 0
+    if [[ "$(systemctl show --property=LoadState --value "$SERVICE_NAME")" != "not-found" ]]; then
+        fail 'The provider is already registered with systemd; refusing to replace it.'
+        return 1
     fi
-fi
+}
 
-# Clone repository directly to /opt
-echo -e "${GREEN}[4/9]${NC} Cloning repository to $INSTALL_DIR..."
-sudo git clone --depth 1 "$GITHUB_REPO" "$INSTALL_DIR"
-echo "Repository cloned successfully"
+write_environment() {
+    local source_dir=$1 config_file=$2 secret_file=$3 destination=$4
+    local domain_filter shared_secret line
+    [[ -f "$config_file" && ! -L "$config_file" && -O "$config_file" ]] || {
+        fail 'Domain filter must be a regular file owned by the current user.'; return 1;
+    }
+    [[ -f "$secret_file" && ! -L "$secret_file" && -O "$secret_file" ]] || {
+        fail 'Shared secret must be a regular file owned by the current user.'; return 1;
+    }
+    [[ "$(stat -c %a "$secret_file")" == 600 ]] || {
+        fail 'Shared secret file must have mode 0600.'; return 1;
+    }
+    domain_filter=$(<"$config_file")
+    shared_secret=$(<"$secret_file")
+    [[ -n "$domain_filter" && "$domain_filter" != *[!a-zA-Z0-9.,*_-]* ]] || {
+        fail 'Domain filter contains unsupported characters.'; return 1;
+    }
+    [[ ${#shared_secret} -ge 32 && "$shared_secret" != *[!a-zA-Z0-9._~+/=-]* ]] || {
+        fail 'Shared secret must contain at least 32 environment-safe characters.'; return 1;
+    }
+    (
+        set -C
+        umask 077
+        {
+            while IFS= read -r line || [[ -n "$line" ]]; do
+                case "$line" in
+                    DOMAIN_FILTER=*|SHARED_SECRET=*) ;;
+                    *) printf '%s\n' "$line" ;;
+                esac
+            done < "$source_dir/.env.example"
+            printf 'DOMAIN_FILTER=%s\n' "$domain_filter"
+            printf 'SHARED_SECRET=%s\n' "$shared_secret"
+        } > "$destination"
+    )
+}
 
-# Set ownership to pi user
-sudo chown -R pi:pi "$INSTALL_DIR"
+install_provider() (
+    local config_file=/tmp/external-dns-domain-filter secret_file=/tmp/external-dns-shared-secret source_dir=
+    local stage node_version node_major node_minor
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --config-file|--secret-file|--source-dir)
+                [[ $# -ge 2 && -n "$2" ]] || { fail "Missing value for $1"; return 1; }
+                case "$1" in
+                    --config-file) config_file=$2 ;;
+                    --secret-file) secret_file=$2 ;;
+                    --source-dir) source_dir=$2 ;;
+                esac
+                shift 2
+                ;;
+            *) fail 'Usage: install.sh [--source-dir DIR] [--config-file FILE] [--secret-file FILE]'; return 1 ;;
+        esac
+    done
+    [[ "$(whoami)" == pi ]] || { fail 'Run as pi, not root.'; return 1; }
+    check_destination
+    [[ -x "$NODE_PATH" ]] || { fail 'Firewalla Node executable is missing.'; return 1; }
+    node_version=$("$NODE_PATH" -v)
+    node_version=${node_version#v}
+    IFS=. read -r node_major node_minor _ <<< "$node_version"
+    if [[ "$node_major" -lt 12 || ( "$node_major" -eq 12 && "$node_minor" -lt 14 ) ]]; then
+        fail 'Node 12.14 or newer is required.'
+        return 1
+    fi
 
-# Create .env file if it doesn't exist
-if [ ! -f "$INSTALL_DIR/.env" ]; then
-    cp "$INSTALL_DIR/.env.example" "$INSTALL_DIR/.env"
-    echo "Created .env file from .env.example"
-fi
+    stage=$(mktemp -d)
+    trap 'rm -r -- "$stage"' EXIT
+    if [[ -z "$source_dir" ]]; then
+        git clone --depth 1 "$GITHUB_REPO" "$stage/source"
+        source_dir="$stage/source"
+    fi
+    [[ -f "$source_dir/src/server.js" && -f "$source_dir/systemd/$SERVICE_FILE" && -d "$source_dir/node_modules" ]] || {
+        fail 'Source package is incomplete; bundled dependencies and systemd unit are required.'; return 1;
+    }
+    [[ ! -e "$source_dir/.env" && ! -L "$source_dir/.env" ]] || {
+        fail 'Source package must not contain an existing .env file.'; return 1;
+    }
+    write_environment "$source_dir" "$config_file" "$secret_file" "$stage/environment"
+    printf 'pi ALL=(ALL) NOPASSWD: /bin/systemctl restart firerouter_dns\n' > "$stage/sudoers"
+    sudo visudo -cf "$stage/sudoers"
+    if [[ -e "$SUDOERS_FILE" || -L "$SUDOERS_FILE" ]]; then
+        if [[ -L "$SUDOERS_FILE" ]] || ! sudo cmp -s "$stage/sudoers" "$SUDOERS_FILE"; then
+            fail 'Existing provider sudoers entry differs; refusing to replace it.'
+            return 1
+        fi
+    fi
 
-# Verify dependencies are present
-echo -e "${GREEN}[5/9]${NC} Verifying dependencies..."
-if [ ! -d "$INSTALL_DIR/node_modules" ]; then
-    echo -e "${RED}ERROR: node_modules not found. The repository may be incomplete.${NC}"
-    exit 1
-fi
-echo "Dependencies verified (bundled in repository)"
+    check_destination
+    sudo mkdir -m 0755 "$INSTALL_DIR"
+    sudo chown pi:pi "$INSTALL_DIR"
+    cp -R "$source_dir/." "$INSTALL_DIR/"
+    install -m 0600 "$stage/environment" "$INSTALL_DIR/.env"
+    mkdir -p "$DNSMASQ_DIR"
+    sudo install -o root -g root -m 0644 "$INSTALL_DIR/systemd/$SERVICE_FILE" "$UNIT_FILE"
+    if [[ ! -e "$SUDOERS_FILE" ]]; then
+        sudo install -o root -g root -m 0440 "$stage/sudoers" "$SUDOERS_FILE"
+    fi
+    sudo systemctl daemon-reload
+    sudo systemctl enable "$SERVICE_NAME"
+    sudo systemctl start "$SERVICE_NAME"
+    sudo systemctl is-active --quiet "$SERVICE_NAME"
+    printf 'Provider installed and started. Existing DNS records were preserved.\n'
+    printf 'Remove the private input files when deployment verification is complete.\n'
+)
 
-# Configure environment
-echo -e "${GREEN}[6/9]${NC} Configuring environment..."
-# Update .env file with domain filter and shared secret from config files
-sed -i "s/DOMAIN_FILTER=.*/DOMAIN_FILTER=$DOMAIN_FILTER/" "$INSTALL_DIR/.env"
-sed -i "s/SHARED_SECRET=.*/SHARED_SECRET=$SHARED_SECRET/" "$INSTALL_DIR/.env"
-echo "Domain filter configured: $DOMAIN_FILTER"
-echo "Shared secret configured: ${SHARED_SECRET:0:8}..."
-
-# Clean up config files after successful configuration
-rm -f "$CONFIG_FILE" "$SECRET_FILE"
-echo "Removed temporary config files"
-
-# Create dnsmasq directory
-echo -e "${GREEN}[7/9]${NC} Creating dnsmasq directory..."
-mkdir -p "$DNSMASQ_DIR"
-echo "Directory created: $DNSMASQ_DIR"
-
-# Install systemd service
-echo -e "${GREEN}[8/9]${NC} Installing systemd service..."
-echo "Requesting sudo access to install systemd service..."
-sudo cp "$INSTALL_DIR/systemd/$SERVICE_FILE" "/etc/systemd/system/$SERVICE_FILE"
-sudo systemctl daemon-reload
-echo "Systemd service installed"
-
-# Configure sudoers for DNS service restart
-echo "Configuring sudo permissions for DNS service restart..."
-sudo bash -c "cat > '$SUDOERS_FILE' << 'EOF'
-# Allow pi user to restart firerouter_dns for external-dns-firewalla-webhook
-pi ALL=(ALL) NOPASSWD: /bin/systemctl restart firerouter_dns
-EOF"
-sudo chmod 0440 "$SUDOERS_FILE"
-echo "Sudo permissions configured"
-
-# Enable and start service
-echo -e "${GREEN}[9/9]${NC} Starting service..."
-sudo systemctl enable "$SERVICE_NAME"
-sudo systemctl start "$SERVICE_NAME"
-
-# Wait a moment for service to start
-sleep 2
-
-# Check service status
-echo ""
-echo "========================================="
-if sudo systemctl is-active --quiet "$SERVICE_NAME"; then
-    echo -e "${GREEN}Installation completed successfully!${NC}"
-    echo ""
-    echo "Service status:"
-    sudo systemctl status "$SERVICE_NAME" --no-pager -l | head -n 10
-    echo ""
-    echo -e "${GREEN}Next steps:${NC}"
-    echo "1. Configure external-dns in your Kubernetes cluster to use this webhook"
-    echo "2. Set the webhook endpoint to: http://<firewalla-ip>:8888"
-    echo "3. Monitor logs with: sudo journalctl -u $SERVICE_NAME -f"
-    echo ""
-    echo "For more information, see: $INSTALL_DIR/README.md"
-else
-    echo -e "${RED}Installation completed but service failed to start${NC}"
-    echo ""
-    echo "Check the logs with: sudo journalctl -u $SERVICE_NAME -n 50"
-    exit 1
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    install_provider "$@"
 fi

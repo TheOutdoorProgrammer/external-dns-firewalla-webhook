@@ -50,21 +50,36 @@ Each steps needs to be ran on either your firewalla device or your Kubernetes cl
 
 ### 1. Install the Webhook Provider (Firewalla)
 
-SSH into your Firewalla as the `pi` user and run:
+Run the reviewed installer as `pi`. It refuses an existing installation or systemd unit and preserves existing DNS files. Inspect a partial installation before retrying; the installer never deletes it.
 
-#### Set your domain filter and shared secret
-```bash
-# Set your domain filter
-echo "home.local,*.home.local" > /tmp/external-dns-domain-filter
+Create private input files. For a new installation only, generate a shared secret:
 
-# Generate and set a secure shared secret (same secret must be used in Kubernetes)
-openssl rand -hex 32 > /tmp/external-dns-shared-secret
-# Or manually set: echo "your-secure-random-secret-here" > /tmp/external-dns-shared-secret
-````
-#### Install the provider
 ```bash
-curl -fsSL https://raw.githubusercontent.com/TheOutdoorProgrammer/external-dns-firewalla-webhook/main/scripts/install.sh | bash
+umask 077
+install_inputs=$(mktemp -d)
+printf '%s\n' 'home.local,*.home.local' > "$install_inputs/domain"
+openssl rand -hex 32 > "$install_inputs/secret"
 ```
+
+For restoration, reuse the existing Kubernetes shared secret instead. Transfer it on stdin into the private secret file without printing it or putting it in a command argument. The file must be owned by `pi`, mode `0600`, and contain at least 32 letters, digits or `._~+/=-` characters. The installer rejects unsupported input instead of silently changing the credential.
+
+Use an inspected source archive or checkout containing the bundled `node_modules`, with no `.env` file:
+
+```bash
+reviewed_source=/path/to/reviewed/source
+bash "$reviewed_source/scripts/install.sh" \
+  --source-dir "$reviewed_source" \
+  --config-file "$install_inputs/domain" \
+  --secret-file "$install_inputs/secret"
+```
+
+Omitting `--source-dir` clones the current default branch. An explicit source directory keeps restoration tied to the revision you reviewed. No package installation is needed on Firewalla.
+
+The installer validates the candidate sudoers rule, creates the provider directory and a `0600` environment file, installs its systemd unit, and enables and starts only the provider. An existing, different sudoers rule stops installation. It does not directly restart DNS, but the running provider restarts `firerouter_dns` when external-dns submits record changes. This can briefly interrupt DNS resolution.
+
+After verifying provider health and DNS reconciliation, remove the private input directory you created. Input files remain available after a failed attempt for controlled recovery.
+
+Run installer regression checks locally with `npm run test:installer` and `shellcheck scripts/install.sh`. Tests use temporary directories and mocked privileged commands; they do not contact Firewalla.
 
 ### 2. Configure External-DNS (Kubernetes)
 

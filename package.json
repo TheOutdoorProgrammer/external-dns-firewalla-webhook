@@ -9,7 +9,8 @@
   ],
   "scripts": {
     "start": "node src/server.js",
-    "dev": "NODE_ENV=development node src/server.js"
+    "dev": "NODE_ENV=development node src/server.js",
+    "test:installer": "node scripts/install.test.js"
   },
   "engines": {
     "node": ">=12.14.0"
