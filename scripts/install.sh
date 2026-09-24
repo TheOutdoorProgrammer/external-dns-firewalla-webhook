@@ -106,9 +106,14 @@ install_provider() (
     }
     write_environment "$source_dir" "$config_file" "$secret_file" "$stage/environment"
     printf 'pi ALL=(ALL) NOPASSWD: /bin/systemctl restart firerouter_dns\n' > "$stage/sudoers"
+    printf '# Allow pi user to restart firerouter_dns for external-dns-firewalla-webhook\n' > "$stage/legacy-sudoers"
+    cat "$stage/sudoers" >> "$stage/legacy-sudoers"
     sudo visudo -cf "$stage/sudoers"
     if [[ -e "$SUDOERS_FILE" || -L "$SUDOERS_FILE" ]]; then
-        if [[ -L "$SUDOERS_FILE" ]] || ! sudo cmp -s "$stage/sudoers" "$SUDOERS_FILE"; then
+        if [[ -L "$SUDOERS_FILE" ]] || {
+            ! sudo cmp -s "$stage/sudoers" "$SUDOERS_FILE" &&
+            ! sudo cmp -s "$stage/legacy-sudoers" "$SUDOERS_FILE"
+        }; then
             fail 'Existing provider sudoers entry differs; refusing to replace it.'
             return 1
         fi

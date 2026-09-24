@@ -117,4 +117,10 @@ test('matching sudoers is preserved', root => fs.writeFileSync(path.join(root, '
   assert.strictEqual(fs.readFileSync(path.join(root, 'sudoers'), 'utf8'), sudoers);
   assert(!commands.split('\n').some(line => line.startsWith('sudo install') && line.endsWith('/sudoers')));
 });
+const legacySudoers = '# Allow pi user to restart firerouter_dns for external-dns-firewalla-webhook\n' + sudoers;
+test('legacy installer comment is preserved', root => fs.writeFileSync(path.join(root, 'sudoers'), legacySudoers), (root, result) => {
+  assert.strictEqual(result.status, 0, result.stderr);
+  assert.strictEqual(fs.readFileSync(path.join(root, 'sudoers'), 'utf8'), legacySudoers);
+});
+test('sudoers include directives are not ignored as comments', root => fs.writeFileSync(path.join(root, 'sudoers'), '#include /another-policy\n' + sudoers), rejected);
 console.log(passed + ' installer tests passed');
