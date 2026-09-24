@@ -130,6 +130,10 @@ install_provider() (
         sudo install -o root -g root -m 0440 "$stage/sudoers" "$SUDOERS_FILE"
     fi
     sudo systemctl daemon-reload
+    if [[ "$(sudo systemctl show --property=NoNewPrivileges --value "$SERVICE_NAME")" != no ]]; then
+        fail 'Effective NoNewPrivileges would block the DNS restart helper; provider was not started.'
+        return 1
+    fi
     sudo systemctl enable "$SERVICE_NAME"
     sudo systemctl start "$SERVICE_NAME"
     sudo systemctl is-active --quiet "$SERVICE_NAME"

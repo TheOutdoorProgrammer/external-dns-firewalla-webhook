@@ -37,7 +37,9 @@ whoami() { printf 'pi\\n'; }
 systemctl() {
     printf 'systemctl %s\\n' "$*" >> "$TEST_ROOT/commands"
     if [[ "$1" == show ]]; then
-        if [[ -f "$TEST_ROOT/registered" ]]; then printf 'loaded\\n'; else printf 'not-found\\n'; fi
+        if [[ "$2" == --property=NoNewPrivileges ]]; then
+            if [[ -f "$TEST_ROOT/no-new-privileges" ]]; then printf 'yes\\n'; else printf 'no\\n'; fi
+        elif [[ -f "$TEST_ROOT/registered" ]]; then printf 'loaded\\n'; else printf 'not-found\\n'; fi
     fi
 }
 sudo() {
@@ -97,6 +99,12 @@ test('dangling install symlink is rejected', root => fs.symlinkSync('missing', p
 test('existing systemd unit is rejected', root => fs.writeFileSync(path.join(root, 'units/provider.service'), 'keep'), rejected);
 test('registered service is rejected', root => fs.writeFileSync(path.join(root, 'registered'), ''), rejected);
 test('failed sudoers validation precedes installation', root => fs.writeFileSync(path.join(root, 'invalid-sudoers'), ''), rejected);
+test('effective NoNewPrivileges prevents enable and start', root => fs.writeFileSync(path.join(root, 'no-new-privileges'), ''), (_root, result, commands) => {
+  assert.notStrictEqual(result.status, 0, result.stdout);
+  assert(commands.includes('systemctl daemon-reload'));
+  assert(!commands.includes('systemctl enable'));
+  assert(!commands.includes('systemctl start'));
+});
 test('inherited xtrace cannot expose credentials', root => fs.writeFileSync(path.join(root, 'trace-enabled'), ''), (_root, result) => {
   assert.strictEqual(result.status, 0, result.stderr);
 });

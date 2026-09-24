@@ -75,7 +75,7 @@ bash "$reviewed_source/scripts/install.sh" \
 
 Omitting `--source-dir` clones the current default branch. An explicit source directory keeps restoration tied to the revision you reviewed. No package installation is needed on Firewalla.
 
-The installer validates the candidate sudoers rule, creates the provider directory and a `0600` environment file, installs its systemd unit, and enables and starts only the provider. An existing, different sudoers rule stops installation. It does not directly restart DNS, but the running provider restarts `firerouter_dns` when external-dns submits record changes. This can briefly interrupt DNS resolution.
+The installer validates the candidate sudoers rule, creates the provider directory and a `0600` environment file, installs its systemd unit, and enables and starts only the provider. An existing, different sudoers rule stops installation. After loading the unit, it also checks that effective `NoNewPrivileges` is disabled so the intended sudo restart helper can work. It does not directly restart DNS, but the running provider restarts `firerouter_dns` when external-dns submits record changes. This can briefly interrupt DNS resolution.
 
 After verifying provider health and DNS reconciliation, remove the private input directory you created. Input files remain available after a failed attempt for controlled recovery.
 
