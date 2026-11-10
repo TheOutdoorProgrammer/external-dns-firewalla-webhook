@@ -30,7 +30,7 @@
   "author": "TheOutdoorProgrammer",
   "license": "MIT",
   "dependencies": {
-    "express": "^4.22.2",
+    "express": "^4.22.3",
     "jsonwebtoken": "^9.0.2"
   },
   "devDependencies": {}
