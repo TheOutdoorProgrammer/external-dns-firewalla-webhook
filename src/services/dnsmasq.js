@@ -82,7 +82,19 @@ async function getRecords() {
            let recordType = 'A';
 
            for (const line of lines) {
-             // Format: address=/domain/ip
+             // Format: host-record=domain,ip
+             const hostRecordMatch = line.match(/^host-record=([^,]+),(.+)$/);
+             if (hostRecordMatch) {
+               dnsName = hostRecordMatch[1];
+               const ip = hostRecordMatch[2];
+               if (validator.isValidIPv4(ip)) {
+                 targets.push(ip);
+                 recordType = 'A';
+               }
+             }
+
+             // Legacy format: address=/domain/ip, written before host-record was used.
+             // Still parsed so external-dns can see and clean up pre-existing records.
              const addressMatch = line.match(/^address=\/([^\/]+)\/(.+)$/);
              if (addressMatch) {
                dnsName = addressMatch[1];
@@ -145,7 +157,7 @@ async function writeRecord(endpoint) {
    let content;
    if (recordType === 'A') {
      // Generate dnsmasq A record format
-     content = targets.map(ip => `address=/${dnsName}/${ip}`).join('\n') + '\n';
+     content = targets.map(ip => `host-record=${dnsName},${ip}`).join('\n') + '\n';
    } else if (recordType === 'TXT') {
      // Generate dnsmasq TXT record format
      content = targets.map(txt => `txt-record=${dnsName},"${txt}"`).join('\n') + '\n';
@@ -293,5 +305,7 @@ async function applyChanges(changes) {
 
 module.exports = {
   getRecords,
-  applyChanges
+  applyChanges,
+  // exported for tests: exercises record formatting without the service restart
+  writeRecord
 };

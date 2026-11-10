@@ -223,12 +223,21 @@ DNS records are stored as individual files in `/home/pi/.firewalla/config/dnsmas
 
 ```
 example.home.local
-├── address=/example.home.local/192.168.1.100
-└── address=/example.home.local/192.168.1.101
+├── host-record=example.home.local,192.168.1.100
+└── host-record=example.home.local,192.168.1.101
 
 api.home.local
 └── cname=api.home.local,service.home.local
 ```
+
+A records are written as `host-record` rather than `address`. dnsmasq only resolves a
+`cname=` whose target is a name it already knows from `host-record`, `/etc/hosts` or a
+DHCP lease — a name defined with `address=/name/ip` is not a valid CNAME target, so
+CNAMEs pointing at such names fail to resolve. `host-record` also matches only the exact
+name, where `address=` additionally matches every subdomain of it.
+
+Records written by earlier versions in the `address=/name/ip` form are still read, so
+external-dns can reconcile and remove them.
 
 ## Testing
 
